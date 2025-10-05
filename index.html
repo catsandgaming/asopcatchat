@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cat Cafe Autonomous Chat Simulator</title>
+    <title> A Slice Of Purrfection Cat Chat! </title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -58,7 +58,7 @@
             background-color: white;
             padding: 1rem;
             border-top: 1px solid #e5e7eb;
-            box-shadow: 0 -4px 6px -1px rgb(0 0 0 / 0.1);
+            box-shadow: 0 -4px 6px -1-2px rgb(0 0 0 / 0.1);
         }
     </style>
 </head>
@@ -113,7 +113,6 @@
     <!-- Firebase & Gemini API Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // FIX: Re-import onAuthStateChanged for proper auth flow control
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, query, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -133,6 +132,7 @@
         let isSending = false;
         let chatStarted = false;
         let authReady = false; // Flag to control data fetching after auth
+        let configMissing = false; // Flag to track if the environment config was missing
 
         // Character List (The Owner is defined here)
         const OWNER_PROFILE = {
@@ -237,53 +237,91 @@
         // --- Firebase Initialization and Data Fetching ---
 
         function initializeFirebase() {
-            // FIX: If the config is missing (common when deploying), stop and display a clear error.
-            if (Object.keys(firebaseConfig).length === 0) {
-                statusDisplay.textContent = "Error: Firebase config missing. Cannot initialize Firestore/Auth.";
-                return;
+            let configToUse = firebaseConfig;
+            configMissing = Object.keys(firebaseConfig).length === 0;
+
+            if (configMissing) {
+                // Use a dummy config to prevent initializeApp from crashing 
+                configToUse = { 
+                    apiKey: "DUMMY", 
+                    authDomain: "DUMMY.firebaseapp.com", 
+                    projectId: "DUMMY", 
+                    storageBucket: "DUMMY.appspot.com", 
+                    messagingSenderId: "DUMMY", 
+                    appId: "DUMMY" 
+                };
+                statusDisplay.textContent = "⚠️ WARNING: Config Missing. Data cannot be loaded. Run in Canvas editor.";
+                console.warn("Using dummy Firebase config. Database functionality is disabled.");
+            } else {
+                statusDisplay.textContent = "Initializing...";
             }
 
             try {
                 setLogLevel('debug');
                 
-                const app = initializeApp(firebaseConfig);
+                const app = initializeApp(configToUse);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
-                // 1. Start Authentication process
-                // This promise resolves or rejects the sign-in attempt.
+                // If config is missing, we stop all database operations here. The Gemini API is still available.
+                if (configMissing) {
+                    // Load placeholder data to allow the Gemini simulation to start, 
+                    // though it won't be dynamic based on the Firestore data.
+                    loadPlaceholderCats();
+                    startButton.disabled = false;
+                    return;
+                }
+
+                // 1. Start Authentication process (only if config is present)
                 const authPromise = initialAuthToken 
                     ? signInWithCustomToken(auth, initialAuthToken)
                     : signInAnonymously(auth);
 
                 authPromise.catch(e => {
-                    // Log specific sign-in failures (e.g., invalid token)
                     console.error("Authentication sign-in failed:", e.message);
                     statusDisplay.textContent = "Error: Failed to sign in. Check console for details.";
                 });
-
+                
                 // 2. Use onAuthStateChanged to wait for successful sign-in
-                // This listener guarantees the user object is ready and permissions are established.
                 const unsubscribe = onAuthStateChanged(auth, (user) => {
                     if (user && !authReady) {
                         authReady = true;
                         console.log("Authentication successful. UID:", user.uid);
-                        // Now it's safe to fetch the data
                         fetchCats();
-                        // Unsubscribe to avoid running this check repeatedly
                         unsubscribe();
                     }
-                    // Do nothing if user is null on first call, as sign-in is still pending.
                 });
-                
 
             } catch (error) {
                 console.error("Firebase initialization error:", error);
                 statusDisplay.textContent = `Error initializing: ${error.message}`;
             }
         }
+        
+        // Fallback cat data for when config is missing
+        function loadPlaceholderCats() {
+            cats = [
+                { name: "Ronnie", breed: "Siamese", personality: "Vocal and demanding, often complaining about the service.", likes: ["Attention", "Warm spots"], dislikes: ["Loud noises"] },
+                { name: "Jigsaw", breed: "Tabby", personality: "Adept at puzzles, often found staring intently at objects.", likes: ["Feather toys", "Quiet observation"], dislikes: ["Being rushed"] },
+                { name: "Bear", breed: "Maine Coon", personality: "Large and gentle, but a clumsy bully who pushes smaller cats.", likes: ["Cuddles", "Big naps"], dislikes: ["Small spaces"] },
+                { name: "Jet", breed: "Black Cat", personality: "Sleek and mysterious, spends most of its time watching birds.", likes: ["High places", "Shadows"], dislikes: ["Bright lights"] },
+                { name: "Shadow", breed: "Sphynx", personality: "Naked and perpetually cold, constantly seeking warmth from customers or appliances.", likes: ["Sweaters", "Heat vents"], dislikes: ["Cold air"] },
+                { name: "Thor", breed: "Ragdoll", personality: "Sweet and floppy, but has a dramatic flair for 'fainting' when picked up.", likes: ["Belly rubs", "Soft blankets"], dislikes: ["Being held tightly"] },
+                { name: "Marble", breed: "Calico", personality: "A true diva, highly photogenic, and knows it. Demands the best sunbeams.", likes: ["Cameras", "Sunbeams"], dislikes: ["Being ignored"] },
+                { name: "Banjo", breed: "Munchkin", personality: "Short-legged and perpetually playful, always tripping over its own feet.", likes: ["Laser pointers", "Chasing dust"], dislikes: ["Stairs"] },
+                { name: "Button", breed: "Scottish Fold", personality: "Sweetest cat in the cafe, but prone to anxiety. Hides behind the register.", likes: ["Owner", "Inside boxes"], dislikes: ["New people"] },
+                { name: "Dash", breed: "Bengal", personality: "High-energy and athletic, constantly running laps around the tables.", likes: ["Running", "Climbing"], dislikes: ["Sitting still"] }
+            ];
+            characters = [...cats, OWNER_PROFILE];
+            isReady = true;
+            startButton.disabled = false;
+            statusDisplay.textContent = "⚠️ WARNING: Using placeholder data. Ready to start!";
+        }
+
 
         function fetchCats() {
+            if (configMissing) return;
+
             if (!db) {
                 console.error("Firestore database instance is not available.");
                 statusDisplay.textContent = "Database not initialized.";
