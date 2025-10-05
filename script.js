@@ -1,25 +1,3 @@
-// =============================================================
-// 1. FIREBASE CONFIGURATION (Paste your code here)
-// =============================================================
-import { initializeApp } from "firebase/app";
-
-// NOTE: We don't need getAnalytics or the measurementId unless you are
-// actively using that feature. This simplifies the code.
-
-const firebaseConfig = {
-    apiKey: "AIzaSyBXefCDm4PSFMhjonnq8SKuh5lsRmqAqu8",
-    authDomain: "asop-74f7d.firebaseapp.com",
-    projectId: "asop-74f7d",
-    storageBucket: "asop-74f7d.firebasestorage.app",
-    messagingSenderId: "955514442329",
-    appId: "1:955514442329:web:18b4c26eaeab5fc9031748",
-    measurementId: "G-LJZ27YFL42"
-};
-
-// Initialize Firebase (even if you don't use Hosting/DB, this connects you)
-const app = initializeApp(firebaseConfig);
-// =============================================================
-
 
 // =============================================================
 // 2. API Endpoint (Crucial connection to your Python Cloud Function)
