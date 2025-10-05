@@ -4,6 +4,7 @@
 "source": "cat-cafe-backend",
 "runtime": "python311",
 "codebase": "python-functions",
+"entryPoint": "cat_chat_function",
 "ignore": [
 "node_modules",
 ".git",
