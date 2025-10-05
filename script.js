@@ -27,7 +27,8 @@ const app = initializeApp(firebaseConfig);
 // *** You must replace this with the HTTPS URL of your deployed Cloud Function! ***
 // It will look something like: 
 // "https://us-central1-asop-74f7d.cloudfunctions.net/cat_chat_function"
-const API_ENDPOINT = 'YOUR_FIREBASE_CLOUD_FUNCTION_URL_HERE'; 
+const FIREBASE_FUNCTION_URL = "https://catchatfunction-ruxwq3yblq-uc.a.run.app"; 
+
 
 
 // =============================================================
