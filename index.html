@@ -120,6 +120,8 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // API Key is now retrieved from the environment for the OpenAI call
+        const openAIApiKey = typeof __api_key !== 'undefined' ? __api_key : ""; 
         
         // --- State Variables ---
         let db = null;
@@ -409,9 +411,18 @@
                 temperature: 0.8, // Make the dialogue slightly creative
             };
             
+            const headers = { 
+                'Content-Type': 'application/json'
+            };
+
+            // CRITICAL FIX: Include the API key in the Authorization header
+            if (openAIApiKey) {
+                headers['Authorization'] = `Bearer ${openAIApiKey}`;
+            }
+
             const options = {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: headers,
                 body: JSON.stringify(payload)
             };
 
