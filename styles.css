@@ -1,0 +1,158 @@
+/* --- THEME COLORS --- */
+:root {
+    --bg-color: #FFFFFF;
+    --heading-color: #000;
+    --body-text-color: #000;
+    --accent-color: #F53919; /* This will be used for primary actions/highlights */
+    --line-color: #D3D3D3;
+    --saving-badge-color: #FF6D6D; /* Using this for info messages/system alerts */
+
+    /* Custom colors derived or added for specific chat elements */
+    --chat-window-bg: #fdfdfd; /* A slightly off-white for chat window */
+    --cat-message-bg: #f2f2f2; /* Light grey for general cat messages */
+    --owner-message-bg: #e0f2f7; /* Light blueish for owner messages */
+    --button-primary-bg: var(--accent-color); /* Primary button background */
+    --button-primary-text: #FFFFFF; /* Primary button text color */
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--body-text-color);
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+}
+
+header {
+    background-color: var(--accent-color); /* Using accent for header background */
+    color: var(--button-primary-text); /* White text for header */
+    padding: 20px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    color: var(--button-primary-text); /* White for headings in header */
+    margin: 0;
+}
+
+header p {
+    color: var(--button-primary-text); /* White for text in header */
+    margin-top: 5px;
+    opacity: 0.9;
+}
+
+.chat-container {
+    width: 90%;
+    max-width: 800px;
+    background-color: var(--bg-color);
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.08); /* Softer shadow */
+    margin: 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+#chat-window {
+    height: 60vh;
+    overflow-y: auto;
+    border: 1px solid var(--line-color);
+    padding: 10px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    background-color: var(--chat-window-bg); 
+    display: flex; /* Use flexbox for chat bubbles */
+    flex-direction: column; /* Stack messages vertically */
+}
+
+/* Base message styles */
+.chat-bubble {
+    padding: 10px 15px;
+    margin: 8px 0;
+    border-radius: 20px; /* More rounded corners */
+    line-height: 1.5;
+    max-width: 85%; /* Give a bit more room */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* Subtle shadow for bubbles */
+}
+
+/* Styling for the Cat Agents */
+.cat-message {
+    background-color: var(--cat-message-bg);
+    color: var(--body-text-color);
+    align-self: flex-start;
+    border: 1px solid #e0e0e0; /* Slightly darker than bg */
+}
+
+/* Styling for the Cafe Owner (Initiator) and System Messages */
+.owner-message, .info-message {
+    background-color: var(--owner-message-bg); /* Use a distinct background */
+    color: var(--body-text-color);
+    align-self: flex-end; /* Align to the right */
+    margin-left: auto; /* Push to the right */
+    text-align: right;
+    border: 1px solid #d0eaf5;
+    font-weight: bold;
+}
+
+.info-message {
+    background-color: var(--saving-badge-color); /* Using saving badge for info/system */
+    color: var(--button-primary-text); /* White text on this info message */
+    text-align: center;
+    align-self: center; /* Center system messages */
+    max-width: 90%;
+}
+
+
+.input-area {
+    display: flex;
+    gap: 10px;
+}
+
+#initial-prompt {
+    flex-grow: 1;
+    padding: 12px;
+    border: 1px solid var(--line-color);
+    border-radius: 5px;
+    font-size: 1rem;
+    color: var(--body-text-color);
+}
+
+#initial-prompt::placeholder {
+    color: #888;
+}
+
+#start-button {
+    padding: 12px 25px;
+    background-color: var(--button-primary-bg); /* Using accent for button */
+    color: var(--button-primary-text); /* White text */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1rem;
+    transition: background-color 0.3s ease;
+}
+
+#start-button:hover {
+    background-color: darken(var(--button-primary-bg), 10%); /* No direct darken in CSS, but you get the idea */
+    filter: brightness(90%); /* A simple way to darken on hover */
+}
+
+#start-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+footer {
+    margin-top: auto; /* Pushes footer to the bottom */
+    padding: 15px;
+    color: #777;
+    font-size: 0.9em;
+    text-align: center;
+}
