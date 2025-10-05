@@ -69,7 +69,9 @@
         <h1 class="text-3xl font-extrabold text-white text-center flex items-center justify-center">
             <span class="inline-block mr-2 text-4xl">🐈</span> A Slice Of Purrfection Cat Chat!
         </h1>
-        <p class="text-sm text-cat-cream text-center mt-1">Enter a topic, and click 'Next Turn' to watch the conversation unfold!</p>
+        <p class="text-sm text-white text-center mt-1">
+            Now running on the **Gemini API** to bypass the environment's authentication error.
+        </p>
         <p id="status-display" class="text-xs text-cat-cream text-center mt-1 font-mono">Loading...</p>
     </header>
 
@@ -110,7 +112,7 @@
         </div>
     </div>
 
-    <!-- Firebase & OpenAI API Logic -->
+    <!-- Firebase & Gemini API Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -120,15 +122,14 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        // API Key is now retrieved from the environment for the OpenAI call
-        const openAIApiKey = typeof __api_key !== 'undefined' ? __api_key : ""; 
         
         // --- State Variables ---
         let db = null;
         let auth = null;
         let cats = [];
         let characters = []; // cats + owner
-        let chatHistory = []; // Stores history in a modified format: { role: "user"|"model", text: "..." }
+        // NOTE: history format is now compatible with Gemini's content array
+        let chatHistory = []; 
         let isReady = false;
         let isSending = false;
         let chatStarted = false;
@@ -152,16 +153,17 @@
         const loadingSpinner = document.getElementById('loading-spinner');
         const initialMessage = document.getElementById('initial-message');
         
-        // OpenAI API Endpoint (using the standard V1 chat completions)
-        const OPENAI_API_URL = `https://api.openai.com/v1/chat/completions`;
+        // Gemini API Endpoint (Reverted to the functional API)
+        const GEMINI_API_KEY = ""; // Key is injected by the environment
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
 
         // --- Utility Functions ---
 
         /**
          * Builds a detailed system instruction for the autonomous chat simulation.
-         * This output is used as the 'system' message content for the OpenAI API.
+         * This output is used as the 'systemInstruction' for the Gemini API.
          */
-        function buildSystemInstruction(topic, history) {
+        function buildSystemInstruction(topic) {
             let instruction = "You are the autonomous script generator for a Cat Cafe Simulation. The characters are 10 cats and their Owner. ";
             instruction += "Your task is to generate the **next turn of the conversation** among 2 to 4 of these characters based on the topic and the current dialogue history. ";
             instruction += "The conversation should be dynamic, realistic, and reflect each character's established personality. The cat characters are: Ronnie, Jigsaw, Bear, Jet, Shadow, Thor, Marble, Banjo, Button, and Dash.\n\n";
@@ -178,7 +180,7 @@
                 instruction += `- ${char.name} (${char.breed}): ${char.personality}. Loves: ${likes}.${dislikes}\n`;
             });
             
-            if (history.length === 0) { // First turn is based on initial prompt (not in history yet)
+            if (chatHistory.length === 0) {
                 instruction += "\nBegin the simulation by having the characters immediately reacting to the initial topic/scene.";
             } else {
                 instruction += "\nGenerate the next turn of dialogue by having the characters respond to the previous turn and move the discussion forward.";
@@ -365,9 +367,9 @@
             initialMessage.classList.add('hidden');
             
             if (!chatStarted) {
-                // Initialize for the first turn - note the simplified history object
+                // Initialize for the first turn 
                 chatHistory = [];
-                chatHistory.push({ role: "user", text: "Initial Scene/Topic: " + topic });
+                chatHistory.push({ role: "user", parts: [{ text: "Initial Scene/Topic: " + topic }] });
                 chatStarted = true;
                 initialPromptInput.disabled = true;
 
@@ -385,50 +387,35 @@
         window.generateNextTurn = async function() {
             if (!isReady || isSending) return;
 
-            // Get the topic from the disabled input field
             const topic = initialPromptInput.value.trim();
             
             isSending = true;
             startButton.disabled = true;
             loadingSpinner.classList.remove('hidden');
 
-            const systemPrompt = buildSystemInstruction(topic, chatHistory);
+            const systemPrompt = buildSystemInstruction(topic);
 
-            // Convert local chatHistory to OpenAI messages format
-            const openaiMessages = [
-                // 1. System Prompt (The Persona and Rules)
-                { role: "system", content: systemPrompt },
-                // 2. Conversation History
-                ...chatHistory.map(h => ({
-                    role: h.role === "model" ? "assistant" : "user",
-                    content: h.text
-                }))
-            ];
-            
             const payload = {
-                model: "gpt-3.5-turbo",
-                messages: openaiMessages,
-                temperature: 0.8, // Make the dialogue slightly creative
+                contents: chatHistory,
+                // System instructions are optional but recommended for guiding the model's persona and response format.
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                // Setting temperature for creativity
+                config: {
+                    temperature: 0.8
+                }
             };
             
-            const headers = { 
-                'Content-Type': 'application/json'
-            };
-
-            // CRITICAL FIX: Include the API key in the Authorization header
-            if (openAIApiKey) {
-                headers['Authorization'] = `Bearer ${openAIApiKey}`;
-            }
-
             const options = {
                 method: 'POST',
-                headers: headers,
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             };
 
             // Call API and Handle Response
             try {
-                const response = await fetchWithRetry(OPENAI_API_URL, options);
+                const response = await fetchWithRetry(GEMINI_API_URL, options);
                 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -437,21 +424,21 @@
 
                 const result = await response.json();
                 
-                // Extract text from OpenAI response structure
-                const text = result.choices?.[0]?.message?.content;
+                // Extract text from Gemini response structure
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
                 if (text) {
                     // Display model message and update history
                     renderMessage(text);
                     // Store the response in the local history using the 'model' role
-                    chatHistory.push({ role: "model", text: text });
+                    chatHistory.push({ role: "model", parts: [{ text: text }] });
                 } else {
                     renderMessage("The simulation hit a wall. All characters are napping. Click 'Next Turn' to try waking them.");
-                    console.error("OpenAI API response missing text content or choices:", result);
+                    console.error("Gemini API response missing text content or candidates:", result);
                 }
 
             } catch (error) {
-                console.error("OpenAI API error:", error);
+                console.error("Gemini API error:", error);
                 renderMessage(`Error: The network connection failed or the characters are too confused to talk. (${error.message})`);
 
             } finally {
