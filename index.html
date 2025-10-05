@@ -26,7 +26,7 @@
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=100..900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--tw-colors-cat-background);
@@ -113,8 +113,8 @@
     <!-- Firebase & Gemini API Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // FIX: Import setLogLevel to enable Firebase debugging
+        // FIX: Import onAuthStateChanged
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, query, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Environment Globals ---
@@ -132,6 +132,7 @@
         let isReady = false;
         let isSending = false;
         let chatStarted = false;
+        let authReady = false; 
 
         // Character List (The Owner is defined here)
         const OWNER_PROFILE = {
@@ -160,7 +161,7 @@
         function buildSystemInstruction(topic, history) {
             let instruction = "You are the autonomous script generator for a Cat Cafe Simulation. The characters are 10 cats and their Owner. ";
             instruction += "Your task is to generate the **next turn of the conversation** among 2 to 4 of these characters based on the topic and the current dialogue history. ";
-            instruction += "The conversation should be dynamic, realistic, and reflect each character's established personality.\n\n";
+            instruction += "The conversation should be dynamic, realistic, and reflect each character's established personality. The cat characters are: Ronnie, Jigsaw, Bear, Jet, Shadow, Thor, Marble, Banjo, Button, and Dash.\n\n";
             instruction += "--- RULES ---\n";
             instruction += "1. The current topic is: " + topic + "\n";
             instruction += "2. Format the entire response as a single block of dialogue using the format 'CharacterName: [Dialogue]'. Use newline characters for multiple speakers in one turn.\n";
@@ -225,8 +226,10 @@
                     }
                     console.warn(`Rate limit hit (429). Retrying in ${2 ** i} seconds...`);
                 } catch (error) {
+                    // Log fetch errors but continue retrying
                     console.error("Fetch error during attempt", i + 1, error);
                 }
+                // Exponential backoff wait
                 await new Promise(resolve => setTimeout(resolve, (2 ** i) * 1000));
             }
             throw new Error("API call failed after multiple retries.");
@@ -236,25 +239,58 @@
         // --- Firebase Initialization and Data Fetching ---
 
         function initializeFirebase() {
-            if (Object.keys(firebaseConfig).length === 0) {
-                statusDisplay.textContent = "Error: Firebase config missing. Cannot run chat.";
-                return;
+            // Check if the environment config is available (it is in the editor, not on Netlify)
+            const isConfigAvailable = Object.keys(firebaseConfig).length > 0 && firebaseConfig.projectId;
+            
+            let configToUse;
+            if (isConfigAvailable) {
+                configToUse = firebaseConfig;
+            } else {
+                // FALLBACK FIX: Use a dummy config to prevent the app from crashing on Netlify (where config is missing).
+                configToUse = { 
+                    apiKey: "DUMMY", 
+                    authDomain: "DUMMY.firebaseapp.com", 
+                    projectId: "DUMMY", 
+                    storageBucket: "DUMMY.appspot.com", 
+                    messagingSenderId: "DUMMY", 
+                    appId: "DUMMY" 
+                };
+                statusDisplay.textContent = "Warning: Running with fallback Firebase config. Deployment fix needed.";
             }
+
             try {
-                // FIX: Set debug log level for better visibility into Firestore operations
                 setLogLevel('debug');
                 
-                const app = initializeApp(firebaseConfig);
+                const app = initializeApp(configToUse);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
+                // 1. Start Authentication process
                 if (initialAuthToken) {
                     signInWithCustomToken(auth, initialAuthToken).catch(e => console.error("Custom token auth failed:", e));
                 } else {
                     signInAnonymously(auth).catch(e => console.error("Anonymous auth failed:", e));
                 }
 
-                fetchCats();
+                // 2. FIX: Wait for the Auth state to change before attempting Firestore operations
+                onAuthStateChanged(auth, (user) => {
+                    if (user && !authReady) {
+                        // User is signed in (either custom token or anonymous)
+                        authReady = true;
+                        console.log("Authentication successful. UID:", user.uid);
+                        // Now it's safe to fetch the data
+                        fetchCats();
+                    } else if (!user) { // FIX: Simplified logic. If user is null, authentication might still be pending or failed.
+                        // We will add a timeout to specifically check for sign-in failure
+                        setTimeout(() => {
+                             if (!auth.currentUser) {
+                                console.error("Authentication failed after delay. Cannot read public data.");
+                                statusDisplay.textContent = "Authentication Failed. Cannot read public data.";
+                             }
+                        }, 5000); // Check again after 5 seconds
+                    }
+                });
+
             } catch (error) {
                 console.error("Firebase initialization error:", error);
                 statusDisplay.textContent = `Error initializing: ${error.message}`;
@@ -262,14 +298,27 @@
         }
 
         function fetchCats() {
+            // Check auth state just in case, though onAuthStateChanged handles it
+            if (!authReady) {
+                console.warn("fetchCats called before authentication was confirmed. Aborting read.");
+                return;
+            }
+
+            // Public collection path: /artifacts/{appId}/public/data/cats
             const catCollectionPath = `artifacts/${appId}/public/data/cats`;
+            
+            if (!db) {
+                console.error("Firestore database instance is not available.");
+                return;
+            }
+
             const q = query(collection(db, catCollectionPath));
 
             onSnapshot(q, (querySnapshot) => {
                 cats = [];
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
-                    if (data.name) {
+                    if (data.name) { // Only count valid cat profiles
                         cats.push(data);
                     }
                 });
@@ -282,11 +331,13 @@
                     statusDisplay.textContent = `10 Cat Profiles + Owner Loaded. Ready to start!`;
                     console.log("All 11 character profiles loaded successfully.");
                 } else {
-                    statusDisplay.textContent = `Loading cat profiles (${cats.length}/10)...`;
+                    statusDisplay.textContent = `Loading cat profiles (${cats.length}/10)... If stuck, ensure data is imported!`;
                 }
             }, (error) => {
                 console.error("Error fetching cat data:", error);
-                statusDisplay.textContent = "Error loading cat data. Run the data importer!";
+                // This error is likely the permissions error you saw, which means 
+                // the security rules might not allow the read even after anonymous sign-in.
+                statusDisplay.textContent = "Error loading cat data: Missing or insufficient permissions. (Did you run the importer?)";
             });
         }
         
