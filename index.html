@@ -26,7 +26,7 @@
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=100..900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--tw-colors-cat-background);
@@ -113,7 +113,7 @@
     <!-- Firebase & Gemini API Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // FIX: Import onAuthStateChanged
+        // FIX: Re-import onAuthStateChanged for proper auth flow control
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, query, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -132,7 +132,7 @@
         let isReady = false;
         let isSending = false;
         let chatStarted = false;
-        let authReady = false; 
+        let authReady = false; // Flag to control data fetching after auth
 
         // Character List (The Owner is defined here)
         const OWNER_PROFILE = {
@@ -226,10 +226,8 @@
                     }
                     console.warn(`Rate limit hit (429). Retrying in ${2 ** i} seconds...`);
                 } catch (error) {
-                    // Log fetch errors but continue retrying
                     console.error("Fetch error during attempt", i + 1, error);
                 }
-                // Exponential backoff wait
                 await new Promise(resolve => setTimeout(resolve, (2 ** i) * 1000));
             }
             throw new Error("API call failed after multiple retries.");
@@ -239,57 +237,45 @@
         // --- Firebase Initialization and Data Fetching ---
 
         function initializeFirebase() {
-            // Check if the environment config is available (it is in the editor, not on Netlify)
-            const isConfigAvailable = Object.keys(firebaseConfig).length > 0 && firebaseConfig.projectId;
-            
-            let configToUse;
-            if (isConfigAvailable) {
-                configToUse = firebaseConfig;
-            } else {
-                // FALLBACK FIX: Use a dummy config to prevent the app from crashing on Netlify (where config is missing).
-                configToUse = { 
-                    apiKey: "DUMMY", 
-                    authDomain: "DUMMY.firebaseapp.com", 
-                    projectId: "DUMMY", 
-                    storageBucket: "DUMMY.appspot.com", 
-                    messagingSenderId: "DUMMY", 
-                    appId: "DUMMY" 
-                };
-                statusDisplay.textContent = "Warning: Running with fallback Firebase config. Deployment fix needed.";
+            // FIX: If the config is missing (common when deploying), stop and display a clear error.
+            if (Object.keys(firebaseConfig).length === 0) {
+                statusDisplay.textContent = "Error: Firebase config missing. Cannot initialize Firestore/Auth.";
+                return;
             }
 
             try {
                 setLogLevel('debug');
                 
-                const app = initializeApp(configToUse);
+                const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
                 // 1. Start Authentication process
-                if (initialAuthToken) {
-                    signInWithCustomToken(auth, initialAuthToken).catch(e => console.error("Custom token auth failed:", e));
-                } else {
-                    signInAnonymously(auth).catch(e => console.error("Anonymous auth failed:", e));
-                }
+                // This promise resolves or rejects the sign-in attempt.
+                const authPromise = initialAuthToken 
+                    ? signInWithCustomToken(auth, initialAuthToken)
+                    : signInAnonymously(auth);
 
-                // 2. FIX: Wait for the Auth state to change before attempting Firestore operations
-                onAuthStateChanged(auth, (user) => {
+                authPromise.catch(e => {
+                    // Log specific sign-in failures (e.g., invalid token)
+                    console.error("Authentication sign-in failed:", e.message);
+                    statusDisplay.textContent = "Error: Failed to sign in. Check console for details.";
+                });
+
+                // 2. Use onAuthStateChanged to wait for successful sign-in
+                // This listener guarantees the user object is ready and permissions are established.
+                const unsubscribe = onAuthStateChanged(auth, (user) => {
                     if (user && !authReady) {
-                        // User is signed in (either custom token or anonymous)
                         authReady = true;
                         console.log("Authentication successful. UID:", user.uid);
                         // Now it's safe to fetch the data
                         fetchCats();
-                    } else if (!user) { // FIX: Simplified logic. If user is null, authentication might still be pending or failed.
-                        // We will add a timeout to specifically check for sign-in failure
-                        setTimeout(() => {
-                             if (!auth.currentUser) {
-                                console.error("Authentication failed after delay. Cannot read public data.");
-                                statusDisplay.textContent = "Authentication Failed. Cannot read public data.";
-                             }
-                        }, 5000); // Check again after 5 seconds
+                        // Unsubscribe to avoid running this check repeatedly
+                        unsubscribe();
                     }
+                    // Do nothing if user is null on first call, as sign-in is still pending.
                 });
+                
 
             } catch (error) {
                 console.error("Firebase initialization error:", error);
@@ -298,27 +284,21 @@
         }
 
         function fetchCats() {
-            // Check auth state just in case, though onAuthStateChanged handles it
-            if (!authReady) {
-                console.warn("fetchCats called before authentication was confirmed. Aborting read.");
-                return;
-            }
-
-            // Public collection path: /artifacts/{appId}/public/data/cats
-            const catCollectionPath = `artifacts/${appId}/public/data/cats`;
-            
             if (!db) {
                 console.error("Firestore database instance is not available.");
+                statusDisplay.textContent = "Database not initialized.";
                 return;
             }
-
+            
+            // Public collection path: /artifacts/{appId}/public/data/cats
+            const catCollectionPath = `artifacts/${appId}/public/data/cats`;
             const q = query(collection(db, catCollectionPath));
 
             onSnapshot(q, (querySnapshot) => {
                 cats = [];
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
-                    if (data.name) { // Only count valid cat profiles
+                    if (data.name) {
                         cats.push(data);
                     }
                 });
@@ -331,13 +311,11 @@
                     statusDisplay.textContent = `10 Cat Profiles + Owner Loaded. Ready to start!`;
                     console.log("All 11 character profiles loaded successfully.");
                 } else {
-                    statusDisplay.textContent = `Loading cat profiles (${cats.length}/10)... If stuck, ensure data is imported!`;
+                    statusDisplay.textContent = `Loading cat profiles (${cats.length}/10)... If stuck, ensure cat data is imported!`;
                 }
             }, (error) => {
                 console.error("Error fetching cat data:", error);
-                // This error is likely the permissions error you saw, which means 
-                // the security rules might not allow the read even after anonymous sign-in.
-                statusDisplay.textContent = "Error loading cat data: Missing or insufficient permissions. (Did you run the importer?)";
+                statusDisplay.textContent = "Error loading cat data: Missing or insufficient permissions. Run the data importer!";
             });
         }
         
