@@ -5,6 +5,7 @@
 "runtime": "python311",
 "codebase": "python-functions",
 "entryPoint": "cat_chat_function",
+"region": "us-central1",
 "ignore": [
 "node_modules",
 ".git",
