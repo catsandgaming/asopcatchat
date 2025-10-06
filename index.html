@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cat Cafe Autonomous Chat Simulator</title>
+    <title>Cat Chat</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -66,13 +66,16 @@
 
     <!-- Header -->
     <header class="bg-cat-purple shadow-xl p-4 md:p-6 sticky top-0 z-10">
-        <h1 class="text-3xl font-extrabold text-white text-center flex items-center justify-center">
-            <span class="inline-block mr-2 text-4xl">🐈</span> A Slice Of Purrfection Cat Chat!
-        </h1>
+        <div class="max-w-4xl mx-auto flex justify-center items-center">
+            <h1 class="text-xl md:text-3xl font-extrabold text-white flex items-center">
+                <span class="inline-block mr-2 text-2xl md:text-4xl">🐈</span> A Slice Of Purrfection Cat Chat!
+            </h1>
+            <!-- The Manage Cats button has been removed and replaced by the URL fragment check -->
+        </div>
         <p class="text-sm text-white text-center mt-1">
-            Running on the **Gemini API** - hoping the environment security issue is resolved!
+            Powered by Gemini AI, you can chat to our cats straight from home!
         </p>
-        <p id="status-display" class="text-xs text-cat-cream text-center mt-1 font-mono">Loading...</p>
+        <p id="status-display" class="text-xs text-white/70 text-center mt-1 font-mono">Loading...</p>
     </header>
 
     <!-- Main Chat Window -->
@@ -112,11 +115,78 @@
         </div>
     </div>
 
+    <!-- Password Prompt Modal (New) -->
+    <div id="password-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[60] hidden flex items-center justify-center transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto p-6 md:p-8 transform transition-transform scale-95">
+            <h2 class="text-2xl font-bold text-cat-purple mb-4 text-center">Owner Access Required</h2>
+            <p class="text-center text-gray-600 mb-6">Enter the owner password to access the Cat Profile Manager.</p>
+            <form id="password-form" onsubmit="handlePasswordSubmit(event)">
+                <input type="password" id="manager-password" placeholder="Password" required
+                    class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-cat-pink focus:border-cat-pink text-center text-lg">
+                <p id="password-error" class="text-red-500 text-sm mt-2 text-center hidden">Incorrect password.</p>
+                <button type="submit" class="w-full bg-cat-pink hover:bg-cat-purple text-white font-bold py-3 mt-5 rounded-lg transition duration-300 shadow-lg">
+                    Unlock Manager
+                </button>
+            </form>
+            <div class="text-center mt-4">
+                 <a href="#" onclick="window.location.hash='';" class="text-sm text-gray-500 hover:text-cat-purple transition">Cancel</a>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Cat Manager Modal (Z-index adjusted to z-50) -->
+    <div id="cat-manager-modal" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden overflow-y-auto p-4 transition-opacity duration-300">
+        <!-- Modal Content -->
+        <div class="bg-white rounded-xl shadow-2xl max-w-4xl mx-auto my-8 p-6 md:p-8">
+            <div class="flex justify-between items-center border-b pb-4 mb-6">
+                <h2 class="text-2xl font-bold text-cat-purple">Cat Profile Manager</h2>
+                <!-- Close button now clears the URL hash -->
+                <button onclick="window.location.hash='';" class="text-gray-400 hover:text-cat-pink transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Add New Cat Form -->
+            <h3 class="text-xl font-semibold text-gray-700 mb-3">Add / Edit Cat Profile</h3>
+            <form id="cat-form" class="grid grid-cols-1 md:grid-cols-2 gap-4 border p-4 rounded-lg mb-8 bg-gray-50">
+                <input type="hidden" id="cat-id-input" value="">
+
+                <input type="text" id="cat-name-input" placeholder="Name (e.g., Whiskers)" required
+                    class="col-span-1 md:col-span-2 p-3 border border-gray-300 rounded-lg focus:ring-cat-pink focus:border-cat-pink">
+                
+                <input type="text" id="cat-breed-input" placeholder="Breed (e.g., Siamese)" required
+                    class="p-3 border border-gray-300 rounded-lg focus:ring-cat-pink focus:border-cat-pink">
+                
+                <input type="text" id="cat-likes-input" placeholder="Likes (comma separated, e.g., Sunbeams, Cuddles)" required
+                    class="p-3 border border-gray-300 rounded-lg focus:ring-cat-pink focus:border-cat-pink">
+                
+                <textarea id="cat-personality-input" placeholder="Personality (e.g., Moody but lovable lap cat)" required
+                    class="col-span-1 md:col-span-2 p-3 border border-gray-300 rounded-lg focus:ring-cat-pink focus:border-cat-pink"></textarea>
+
+                <button type="submit" class="col-span-1 md:col-span-2 bg-cat-pink hover:bg-cat-purple text-white font-bold py-3 rounded-lg transition duration-300 shadow-lg">
+                    <span id="form-button-text">Add New Cat</span>
+                </button>
+            </form>
+
+            <!-- Current Cat Profiles List -->
+            <h3 class="text-xl font-semibold text-gray-700 mb-3">Current Cat Profiles (<span id="cat-count">0</span>)</h3>
+            <div id="cat-list-container" class="space-y-4">
+                <!-- Cat profiles will be dynamically rendered here -->
+                <p id="no-cats-message" class="text-center text-gray-500 py-6 border-dashed border-2 rounded-lg">No cat profiles found in the database. Please add one!</p>
+            </div>
+
+        </div>
+    </div>
+
+
     <!-- Firebase & Gemini API Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, query, onSnapshot, setLogLevel, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Environment Globals ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -126,15 +196,15 @@
         // --- State Variables ---
         let db = null;
         let auth = null;
-        let cats = [];
-        let characters = []; // cats + owner
-        // NOTE: history format is now compatible with Gemini's content array
+        window.cats = []; 
+        let characters = []; 
         let chatHistory = []; 
         let isReady = false;
         let isSending = false;
         let chatStarted = false;
         let authReady = false; 
         let configMissing = false; 
+        let isManaging = false; // New state to track if manager is open and authenticated
 
         // Character List (The Owner is defined here)
         const OWNER_PROFILE = {
@@ -144,6 +214,9 @@
             likes: ["Happy cats", "Coffee", "Quiet afternoons"],
             dislikes: ["Vet visits", "Knocked-over food displays"]
         };
+
+        // Manager Password (Hardcoded for simplicity in this single-file app)
+        const MANAGER_PASSWORD = "ownerpass";
         
         // --- DOM Elements ---
         const chatWindow = document.getElementById('chat-window');
@@ -152,6 +225,19 @@
         const statusDisplay = document.getElementById('status-display');
         const loadingSpinner = document.getElementById('loading-spinner');
         const initialMessage = document.getElementById('initial-message');
+
+        // Cat Manager DOM Elements
+        const managerModal = document.getElementById('cat-manager-modal');
+        const catListContainer = document.getElementById('cat-list-container');
+        const catForm = document.getElementById('cat-form');
+        const catCountSpan = document.getElementById('cat-count');
+        const formButtonText = document.getElementById('form-button-text');
+        const noCatsMessage = document.getElementById('no-cats-message');
+        
+        // Password Modal DOM Elements
+        const passwordModal = document.getElementById('password-modal');
+        const passwordInput = document.getElementById('manager-password');
+        const passwordError = document.getElementById('password-error');
         
         // Gemini API Endpoint (Reverted to the functional API)
         const GEMINI_API_KEY = ""; // Key is injected by the environment
@@ -161,12 +247,11 @@
 
         /**
          * Builds a detailed system instruction for the autonomous chat simulation.
-         * This output is used as the 'systemInstruction' for the Gemini API.
          */
         function buildSystemInstruction(topic) {
-            let instruction = "You are the autonomous script generator for a Cat Cafe Simulation. The characters are 10 cats and their Owner. ";
+            let instruction = "You are the autonomous script generator for a Cat Cafe Simulation. The characters are " + window.cats.length + " cats and their Owner. ";
             instruction += "Your task is to generate the **next turn of the conversation** among 2 to 4 of these characters based on the topic and the current dialogue history. ";
-            instruction += "The conversation should be dynamic, realistic, and reflect each character's established personality. The cat characters are: Ronnie, Jigsaw, Bear, Jet, Shadow, Thor, Marble, Banjo, Button, and Dash.\n\n";
+            instruction += "The conversation should be dynamic, realistic, and reflect each character's established personality. The cat characters are: " + window.cats.map(c => c.name).join(', ') + ".\n\n";
             instruction += "--- RULES ---\n";
             instruction += "1. The current topic is: " + topic + "\n";
             instruction += "2. Format the entire response as a single block of dialogue using the format 'CharacterName: [Dialogue]'. Use newline characters for multiple speakers in one turn.\n";
@@ -176,7 +261,7 @@
 
             characters.forEach(char => {
                 const likes = char.likes.join(", ");
-                const dislikes = char.dislikes.length > 0 ? ` (Dislikes: ${char.dislikes.join(", ")})` : '';
+                const dislikes = char.dislikes && char.dislikes.length > 0 ? ` (Dislikes: ${char.dislikes.join(", ")})` : '';
                 instruction += `- ${char.name} (${char.breed}): ${char.personality}. Loves: ${likes}.${dislikes}\n`;
             });
             
@@ -239,7 +324,7 @@
         }
 
 
-        // --- Firebase Initialization and Data Fetching (Unchanged) ---
+        // --- Firebase Initialization and Data Fetching ---
 
         function initializeFirebase() {
             let configToUse = firebaseConfig;
@@ -271,6 +356,7 @@
                 if (configMissing) {
                     loadPlaceholderCats();
                     startButton.disabled = false;
+                    checkUrlHash(); // Check hash even with placeholder data
                     return;
                 }
 
@@ -288,9 +374,14 @@
                         authReady = true;
                         console.log("Authentication successful. UID:", user.uid);
                         fetchCats();
+                        checkUrlHash(); // Check hash after auth is ready
                         unsubscribe();
-                    }
+                    } 
                 });
+                
+                // Listen for hash changes (e.g., user manually types or removes #/manage-cats)
+                window.addEventListener('hashchange', checkUrlHash);
+
 
             } catch (error) {
                 console.error("Firebase initialization error:", error);
@@ -300,19 +391,20 @@
         
         // Fallback cat data for when config is missing
         function loadPlaceholderCats() {
-            cats = [
-                { name: "Ronnie", breed: "Siamese", personality: "Vocal and demanding, often complaining about the service.", likes: ["Attention", "Warm spots"], dislikes: ["Loud noises"] },
-                { name: "Jigsaw", breed: "Tabby", personality: "Adept at puzzles, often found staring intently at objects.", likes: ["Feather toys", "Quiet observation"], dislikes: ["Being rushed"] },
-                { name: "Bear", breed: "Maine Coon", personality: "Large and gentle, but a clumsy bully who pushes smaller cats.", likes: ["Cuddles", "Big naps"], dislikes: ["Small spaces"] },
-                { name: "Jet", breed: "Black Cat", personality: "Sleek and mysterious, spends most of its time watching birds.", likes: ["High places", "Shadows"], dislikes: ["Bright lights"] },
-                { name: "Shadow", breed: "Sphynx", personality: "Naked and perpetually cold, constantly seeking warmth from customers or appliances.", likes: ["Sweaters", "Heat vents"], dislikes: ["Cold air"] },
-                { name: "Thor", breed: "Ragdoll", personality: "Sweet and floppy, but has a dramatic flair for 'fainting' when picked up.", likes: ["Belly rubs", "Soft blankets"], dislikes: ["Being held tightly"] },
-                { name: "Marble", breed: "Calico", personality: "A true diva, highly photogenic, and knows it. Demands the best sunbeams.", likes: ["Cameras", "Sunbeams"], dislikes: ["Being ignored"] },
-                { name: "Banjo", breed: "Munchkin", personality: "Short-legged and perpetually playful, always tripping over its own feet.", likes: ["Laser pointers", "Chasing dust"], dislikes: ["Stairs"] },
-                { name: "Button", breed: "Scottish Fold", personality: "Sweetest cat in the cafe, but prone to anxiety. Hides behind the register.", likes: ["Owner", "Inside boxes"], dislikes: ["New people"] },
-                { name: "Dash", breed: "Bengal", personality: "High-energy and athletic, constantly running laps around the tables.", likes: ["Running", "Climbing"], dislikes: ["Sitting still"] }
+            // Using a simple index as a temporary ID for placeholder data
+            window.cats = [
+                { id: "ronnie-p", name: "Ronnie", breed: "Siamese", personality: "Vocal and demanding, often complaining about the service.", likes: ["Attention", "Warm spots"], dislikes: ["Loud noises"] },
+                { id: "jigsaw-p", name: "Jigsaw", breed: "Tabby", personality: "Adept at puzzles, often found staring intently at objects.", likes: ["Feather toys", "Quiet observation"], dislikes: ["Being rushed"] },
+                { id: "bear-p", name: "Bear", breed: "Maine Coon", personality: "Large and gentle, but a clumsy bully who pushes smaller cats.", likes: ["Cuddles", "Big naps"], dislikes: ["Small spaces"] },
+                { id: "jet-p", name: "Jet", breed: "Black Cat", personality: "Sleek and mysterious, spends most of its time watching birds.", likes: ["High places", "Shadows"], dislikes: ["Bright lights"] },
+                { id: "shadow-p", name: "Shadow", breed: "Sphynx", personality: "Naked and perpetually cold, constantly seeking warmth from customers or appliances.", likes: ["Sweaters", "Heat vents"], dislikes: ["Cold air"] },
+                { id: "thor-p", name: "Thor", breed: "Ragdoll", personality: "Sweet and floppy, but has a dramatic flair for 'fainting' when picked up.", likes: ["Belly rubs", "Soft blankets"], dislikes: ["Being held tightly"] },
+                { id: "marble-p", name: "Marble", breed: "Calico", personality: "A true diva, highly photogenic, and knows it. Demands the best sunbeams.", likes: ["Cameras", "Sunbeams"], dislikes: ["Being ignored"] },
+                { id: "banjo-p", name: "Banjo", breed: "Munchkin", personality: "Short-legged and perpetually playful, always tripping over its own feet.", likes: ["Laser pointers", "Chasing dust"], dislikes: ["Stairs"] },
+                { id: "button-p", name: "Button", breed: "Scottish Fold", personality: "Sweetest cat in the cafe, but prone to anxiety. Hides behind the register.", likes: ["Owner", "Inside boxes"], dislikes: ["New people"] },
+                { id: "dash-p", name: "Dash", breed: "Bengal", personality: "High-energy and athletic, constantly running laps around the tables.", likes: ["Running", "Climbing"], dislikes: ["Sitting still"] }
             ];
-            characters = [...cats, OWNER_PROFILE];
+            characters = [...window.cats, OWNER_PROFILE];
             isReady = true;
             startButton.disabled = false;
             statusDisplay.textContent = "⚠️ WARNING: Using placeholder data. Ready to start!";
@@ -332,28 +424,210 @@
             const q = query(collection(db, catCollectionPath));
 
             onSnapshot(q, (querySnapshot) => {
-                cats = [];
+                window.cats = [];
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
                     if (data.name) {
-                        cats.push(data);
+                        // CRITICAL: Store the document ID with the data
+                        window.cats.push({ id: doc.id, ...data });
                     }
                 });
 
-                characters = [...cats, OWNER_PROFILE];
+                characters = [...window.cats, OWNER_PROFILE];
 
-                if (cats.length === 10) {
+                if (window.cats.length >= 1) { // Changed minimum to 1 to allow full customization
                     isReady = true;
                     startButton.disabled = false;
-                    statusDisplay.textContent = `10 Cat Profiles + Owner Loaded. Ready to start!`;
-                    console.log("All 11 character profiles loaded successfully.");
+                    statusDisplay.textContent = `${window.cats.length} Cat Profiles + Owner Loaded. Ready to start!`;
+                    console.log(`All ${window.cats.length + 1} character profiles loaded successfully.`);
                 } else {
-                    statusDisplay.textContent = `Loading cat profiles (${cats.length}/10)... If stuck, ensure cat data is imported!`;
+                    // Update status to prompt user to import data if it's low
+                    statusDisplay.textContent = `Loading cat profiles (0 found)... Please use the Importer!`;
+                    isReady = false; 
+                    startButton.disabled = true;
                 }
+                
+                // If the manager is already open (meaning password was entered), re-render the list
+                if (isManaging) {
+                     renderCatList(); 
+                }
+
             }, (error) => {
                 console.error("Error fetching cat data:", error);
                 statusDisplay.textContent = "Error loading cat data: Missing or insufficient permissions. Run the data importer!";
             });
+        }
+        
+        // --- ROUTING/MANAGER ACCESS FUNCTIONS (NEW) ---
+
+        function checkUrlHash() {
+            if (window.location.hash === '#/manage-cats') {
+                if (!isManaging) {
+                    showPasswordPrompt();
+                }
+            } else {
+                hidePasswordPrompt();
+                toggleCatManager(false); // Close the manager if the hash is cleared
+            }
+        }
+
+        function showPasswordPrompt() {
+            passwordModal.classList.remove('hidden');
+            passwordInput.focus();
+        }
+
+        function hidePasswordPrompt() {
+            passwordModal.classList.add('hidden');
+            passwordInput.value = '';
+            passwordError.classList.add('hidden');
+        }
+
+        window.handlePasswordSubmit = function(event) {
+            event.preventDefault();
+            const enteredPassword = passwordInput.value;
+            
+            if (enteredPassword === MANAGER_PASSWORD) {
+                hidePasswordPrompt();
+                toggleCatManager(true);
+            } else {
+                passwordError.classList.remove('hidden');
+                passwordInput.value = '';
+                passwordInput.focus();
+            }
+        }
+
+
+        // Reusable function to open/close the manager modal based on state
+        function toggleCatManager(open) {
+            isManaging = open;
+            if (open) {
+                managerModal.classList.remove('hidden');
+                renderCatList(); 
+                resetCatForm();
+            } else {
+                managerModal.classList.add('hidden');
+            }
+        }
+
+        window.loadCatForEdit = function(cat) {
+            document.getElementById('cat-id-input').value = cat.id;
+            document.getElementById('cat-name-input').value = cat.name;
+            document.getElementById('cat-breed-input').value = cat.breed;
+            // Join the array of likes into a comma-separated string for the input field
+            document.getElementById('cat-likes-input').value = cat.likes.join(', ');
+            document.getElementById('cat-personality-input').value = cat.personality;
+            formButtonText.textContent = `Update ${cat.name}`;
+            managerModal.scrollTop = 0; // Scroll to the top to show the form
+        }
+
+        function resetCatForm() {
+            document.getElementById('cat-id-input').value = '';
+            document.getElementById('cat-name-input').value = '';
+            document.getElementById('cat-breed-input').value = '';
+            document.getElementById('cat-likes-input').value = '';
+            document.getElementById('cat-personality-input').value = '';
+            formButtonText.textContent = "Add New Cat";
+        }
+
+        window.deleteCat = async function(catId, catName) {
+            if (!authReady || configMissing) {
+                // Using console log for non-alert feedback
+                console.error("Cannot delete: Database not connected or user not authenticated.");
+                return;
+            }
+
+            // Custom confirmation prompt
+            if (prompt(`Type 'DELETE' to confirm you want to remove ${catName} permanently.`) !== 'DELETE') {
+                 console.log("Deletion cancelled.");
+                 return;
+            }
+
+            try {
+                const catDocRef = doc(db, `artifacts/${appId}/public/data/cats`, catId);
+                await deleteDoc(catDocRef);
+                console.log(`Cat ${catName} deleted successfully.`);
+            } catch (error) {
+                console.error(`Error deleting cat ${catName}:`, error);
+            }
+        }
+
+        function renderCatList() {
+            catListContainer.innerHTML = ''; // Clear previous list
+            catCountSpan.textContent = window.cats.length;
+
+            if (window.cats.length === 0) {
+                noCatsMessage.classList.remove('hidden');
+                return;
+            } else {
+                noCatsMessage.classList.add('hidden');
+            }
+
+            window.cats.forEach(cat => {
+                const catElement = document.createElement('div');
+                catElement.className = 'flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-white border border-gray-200 rounded-lg shadow-sm';
+                
+                // Get a truncated personality description
+                const personalitySnippet = cat.personality.length > 50 
+                    ? cat.personality.substring(0, 50).trim() + '...' 
+                    : cat.personality;
+
+                catElement.innerHTML = `
+                    <div>
+                        <p class="text-lg font-bold text-cat-purple">${cat.name}</p>
+                        <p class="text-sm text-gray-600">${cat.breed} - ${personalitySnippet}</p>
+                        <p class="text-xs text-gray-500 mt-1">Likes: ${cat.likes.join(', ')}</p>
+                    </div>
+                    <div class="flex space-x-2 mt-3 md:mt-0">
+                        <button onclick="loadCatForEdit(window.cats.find(c => c.id === '${cat.id}'))" class="text-sm text-cat-owner hover:text-green-700 font-semibold transition">Edit</button>
+                        <button onclick="deleteCat('${cat.id}', '${cat.name}')" class="text-sm text-red-500 hover:text-red-700 font-semibold transition">Delete</button>
+                    </div>
+                `;
+                catListContainer.appendChild(catElement);
+            });
+        }
+
+        // Global submit handler for the form
+        catForm.addEventListener('submit', handleCatFormSubmit);
+
+        async function handleCatFormSubmit(event) {
+            event.preventDefault();
+
+            if (!authReady || configMissing) {
+                console.error("Operation failed: Database not connected or user not authenticated.");
+                return;
+            }
+
+            // Use crypto.randomUUID() for new documents, or the existing ID for updates
+            const id = document.getElementById('cat-id-input').value.trim() || crypto.randomUUID();
+            const name = document.getElementById('cat-name-input').value.trim();
+            const breed = document.getElementById('cat-breed-input').value.trim();
+            const personality = document.getElementById('cat-personality-input').value.trim();
+            const likesString = document.getElementById('cat-likes-input').value.trim();
+            
+            // Simple parsing of comma-separated likes
+            const likes = likesString.split(',').map(item => item.trim()).filter(item => item.length > 0);
+
+            const catData = {
+                name: name,
+                breed: breed,
+                personality: personality,
+                likes: likes,
+                dislikes: [], 
+                is_featured: false 
+            };
+
+            const isEditing = !!document.getElementById('cat-id-input').value.trim();
+
+            try {
+                const catDocRef = doc(db, `artifacts/${appId}/public/data/cats`, id);
+                await setDoc(catDocRef, catData); // setDoc handles both creation and updating based on the ID
+
+                console.log(`${isEditing ? 'Updated' : 'Added'} ${name} successfully!`);
+                resetCatForm();
+                // The onSnapshot listener handles refreshing the list
+            } catch (error) {
+                console.error(`Error saving cat data:`, error);
+            }
         }
         
         // --- Simulation Logic ---
