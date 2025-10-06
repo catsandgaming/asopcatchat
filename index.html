@@ -358,7 +358,8 @@
         function buildSystemInstruction(topic, history) {
             let instruction = "You are the autonomous script generator for a Cat Cafe Simulation. The characters are a group of cats and their Owner. ";
             instruction += "Your task is to generate the **next turn of the conversation** among 2 to 4 of these characters based on the topic and the current dialogue history. ";
-            instruction += "The conversation should be dynamic, realistic, and reflect each character's established personality.\n\n";
+            instruction += "The conversation should be dynamic, realistic, and reflect each character's established personality. ";
+            instruction += "The Owner is a mandatory participant but should only speak occasionally.\n\n";
             instruction += "--- RULES ---\n";
             instruction += "1. The current topic is: " + topic + "\n";
             instruction += "2. Format the entire response as a single block of dialogue using the format 'CharacterName: [Dialogue]'. Use newline characters for multiple speakers in one turn.\n";
@@ -445,10 +446,16 @@
         }
 
         window.generateNextTurn = async function() {
-            if (isSending || characters.length <= 1) {
-                if (characters.length <= 1) renderMessage("SYSTEM: Cannot start simulation. Roster must contain at least one cat and the Owner.");
+            // Check if we have at least the owner and one cat to talk
+            if (characters.length <= 1) {
+                // Note: The Owner is always present, so characters.length should be at least 1.
+                // If it's only 1, it means the Firestore subscription failed to load the default cats
+                // AND the user hasn't added any (which they can't due to the error).
+                renderMessage("SYSTEM: Cannot start simulation. Roster must contain at least one cat and the Owner. (Roster size: " + characters.length + ")");
                 return;
             }
+
+            if (isSending) return;
 
             const topic = initialPromptInput.value.trim();
             
