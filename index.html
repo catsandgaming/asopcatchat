@@ -7,7 +7,7 @@
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
-        // --- Firebase Imports ---
+        // --- Firebase Imports (Note: Will only be used if firebaseConfig is present) ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, query, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -17,7 +17,7 @@
 
         // --- Environment Globals ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // FIX 1: Ensure safe access to firebaseConfig even if global variable is temporarily undefined
+        // Safely parse config. This will be null if the environment doesn't provide it.
         const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
@@ -34,6 +34,8 @@
         let isAuthReady = false; 
         let isManaging = false; 
         let currentEditingId = null;
+        let firebaseEnabled = !!firebaseConfig; // Check if Firebase is available
+        
 
         // Character List (The Owner is defined here)
         const OWNER_PROFILE = {
@@ -44,7 +46,7 @@
             dislikes: ["Vet visits", "Knocked-over food displays"]
         };
         
-        // Initial placeholder data (used only to populate Firestore on first run)
+        // Initial placeholder data (used only to populate Firestore on first run or be used directly if Firebase is disabled)
         const MOCK_CAT_DATA = [
             { name: "Ronnie", breed: "Siamese", description: "Vocal and demanding, often complaining about the smallest things.", likes: "Attention, Warm spots" },
             { name: "Jigsaw", breed: "Tabby", description: "Adept at puzzles, often found staring intently at objects.", likes: "Feather toys, Quiet observation" },
@@ -61,8 +63,8 @@
         // Manager Password (Hardcoded for simplicity in this single-file app)
         const MANAGER_PASSWORD = "ownerpass";
         
-        // Gemini API Endpoint
-        const GEMINI_API_KEY = ""; 
+        // --- FIX: Using the provided API key ---
+        const GEMINI_API_KEY = "AIzaSyDwvUCqT7mScNFjb4qR0avyracZcti_ZaQ"; 
         const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
 
         // --- DOM Elements ---
@@ -219,17 +221,23 @@
         function toggleCatManager(open) {
             isManaging = open;
             if (open) {
-                managerModal.classList.remove('hidden');
-                resetForm(); // FIX 2: Ensure form is clear when opening
-                if (window.cats.length === 0 && isAuthReady) {
-                    renderManagerList(window.cats); 
+                managerModal.classList.remove('hidden'); 
+                resetForm(); 
+                if (!firebaseEnabled) {
+                     renderManagerList(window.cats); // If no firebase, render the mock list
                 }
+                // If firebase is enabled, the onSnapshot listener handles rendering
             } else {
                 managerModal.classList.add('hidden');
+                resetForm(); // Ensure reset form runs when closing to clear state
             }
         }
         
         window.loadCatForEdit = function(catId) {
+            if (!firebaseEnabled) {
+                showMessage("Database disabled. Cannot edit mock profiles.", 'error');
+                return;
+            } 
             const cat = window.cats.find(c => c.id === catId);
             if (!cat) return;
 
@@ -271,6 +279,8 @@
          * Populates Firestore with mock data if the collection is empty.
          */
         async function checkAndPopulateInitialData() {
+            if (!firebaseEnabled) return;
+
             try {
                 const catCollection = collection(db, getCatCollectionPath());
                 const querySnapshot = await getDocs(catCollection);
@@ -278,7 +288,6 @@
                 if (querySnapshot.empty) {
                     console.log("Collection is empty. Populating with mock data...");
                     for (const cat of MOCK_CAT_DATA) {
-                        // Ensure data structure matches what's expected for saving
                         await addDoc(catCollection, cat);
                     }
                     console.log("Mock data populated successfully.");
@@ -304,12 +313,18 @@
             }
 
             cats.forEach(cat => {
+                // Ensure cats from mock data have an ID for list keying
+                const catId = cat.id || cat.name.toLowerCase().replace(/\s/g, '-'); 
+
                 const card = document.createElement('div');
                 card.className = 'flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-white border border-gray-200 rounded-lg shadow-sm';
                 
                 const descriptionSnippet = cat.description.length > 50 
                     ? cat.description.substring(0, 50).trim() + '...' 
                     : cat.description;
+                
+                // Disable CRUD buttons if Firebase is not enabled
+                const crudDisabled = firebaseEnabled ? '' : 'disabled opacity-50 cursor-not-allowed';
 
                 card.innerHTML = `
                     <div>
@@ -318,8 +333,8 @@
                         <p class="text-xs text-gray-500 mt-1">Likes: ${cat.likes}</p>
                     </div>
                     <div class="flex space-x-2 mt-3 md:mt-0">
-                        <button onclick="window.loadCatForEdit('${cat.id}')" class="text-sm text-cat-owner hover:text-green-700 font-semibold transition">Edit</button>
-                        <button onclick="window.deleteCat('${cat.id}', '${cat.name}')" class="text-sm text-red-500 hover:text-red-700 font-semibold transition">Delete</button>
+                        <button onclick="window.loadCatForEdit('${catId}')" class="text-sm text-cat-owner hover:text-green-700 font-semibold transition ${crudDisabled}" ${crudDisabled}>Edit</button>
+                        <button onclick="window.deleteCat('${catId}', '${cat.name}')" class="text-sm text-red-500 hover:text-red-700 font-semibold transition ${crudDisabled}" ${crudDisabled}>Delete</button>
                     </div>
                 `;
                 catListContainer.appendChild(card);
@@ -330,8 +345,8 @@
          * Sets up the real-time listener for the cat profiles collection.
          */
         function setupRealtimeListener() {
-            if (!db || !isAuthReady) { 
-                console.warn("Firestore or Auth not ready. Skipping real-time listener setup.");
+            if (!firebaseEnabled || !db || !isAuthReady) { 
+                console.warn("Firestore not fully configured or ready. Skipping real-time listener setup.");
                 return;
             }
 
@@ -349,7 +364,7 @@
                 if (window.cats.length >= 1) { 
                     isReady = true;
                     startButton.disabled = false;
-                    statusDisplay.textContent = `${window.cats.length} Cat Profiles + Owner Loaded. Chat Ready!`;
+                    statusDisplay.textContent = `${window.cats.length} Cat Profiles + Owner Loaded. Chat Ready! (Persistent)`;
                 } else {
                     statusDisplay.textContent = `Loading cat profiles (0 found). Please add one via the Manager.`;
                     isReady = false; 
@@ -374,6 +389,11 @@
         catForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            if (!firebaseEnabled) {
+                showMessage("Database disabled. Cannot save profiles without Firebase Config.", 'error');
+                return;
+            }
+
             const name = nameInput.value.trim();
             const breed = breedInput.value.trim();
             const description = descInput.value.trim();
@@ -389,12 +409,10 @@
 
             try {
                 if (currentEditingId) {
-                    // Update existing cat using setDoc
                     const docRef = doc(catCollectionRef, currentEditingId);
                     await setDoc(docRef, catData, { merge: true });
                     showMessage(`Successfully updated ${name}'s profile!`, 'success');
                 } else {
-                    // Add new cat using addDoc
                     await addDoc(catCollectionRef, catData);
                     showMessage(`Successfully added ${name} to the cafe!`, 'success');
                 }
@@ -406,7 +424,11 @@
         });
 
         window.deleteCat = async function(catId, catName) {
-            // FIX 3: Replaced banned confirm() with a console log and immediate delete for now.
+            if (!firebaseEnabled) {
+                showMessage("Database disabled. Cannot delete profiles without Firebase Config.", 'error');
+                return;
+            }
+            
             console.log(`Deleting cat profile: ${catName} (${catId})...`);
 
             try {
@@ -476,6 +498,10 @@
                 const response = await fetchWithRetry(GEMINI_API_URL, options);
                 
                 if (!response.ok) {
+                    // This error should now only appear if the key is invalid or there's a network issue
+                    if (response.status === 403) {
+                         throw new Error(`API Authorization Failure (403). The provided API key is invalid or restricted.`);
+                    }
                     throw new Error(`API returned status ${response.status}: ${response.statusText}`);
                 }
 
@@ -491,7 +517,7 @@
 
             } catch (error) {
                 console.error("Gemini API error:", error);
-                renderMessage(`Error: The network connection failed or the characters are too confused to talk. (${error.message})`);
+                renderMessage(`Error: ${error.message}`);
 
             } finally {
                 isSending = false;
@@ -503,28 +529,32 @@
         // --- Firebase Initialization ---
 
         async function initializeFirebase() {
-            if (!firebaseConfig) {
-                // If config is missing, we still need to proceed with the core app logic, but persistence is off.
-                statusDisplay.textContent = "⚠️ WARNING: Firebase Config Missing. Data persistence is impossible.";
-                console.error("FATAL: Firebase Config Missing. Data persistence is impossible.");
-                isReady = true; // Still allow chat, but without database loaded cats (which won't happen here)
+            if (!firebaseEnabled) {
+                // If config is missing, load mock data directly and set ready state.
+                window.cats = MOCK_CAT_DATA.map((cat, index) => ({ ...cat, id: `mock-${index}` }));
+                characters = [...window.cats, OWNER_PROFILE];
+
+                statusDisplay.textContent = `⚠️ WARNING: Firebase Config Missing. Loaded ${window.cats.length} Mock Profiles. Chat is Ready.`;
+                isReady = true; 
                 startButton.disabled = false;
-                return;
+                
+                window.addEventListener('hashchange', checkUrlHash);
+                checkUrlHash();
+                return; 
             }
 
+            // If Firebase is enabled, proceed with full initialization
             try {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
 
-                // Initial Authentication Check
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
                     await signInAnonymously(auth);
                 }
 
-                // Auth State Listener (Crucial for setting userId)
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         userId = user.uid;
@@ -538,7 +568,7 @@
                 });
                 
                 window.addEventListener('hashchange', checkUrlHash);
-                checkUrlHash(); // Initial check on load
+                checkUrlHash(); 
 
             } catch (error) {
                 console.error("Firebase Initialization/Authentication Error:", error);
@@ -582,6 +612,9 @@
             padding: 1rem;
             border-top: 1px solid #e5e7eb;
             box-shadow: 0 -4px 6px -1-2px rgb(0 0 0 / 0.1);
+        }
+        .modal-content {
+            z-index: 100;
         }
     </style>
 </head>
@@ -638,11 +671,11 @@
 
     <!-- Password Prompt Modal -->
     <div id="password-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[60] hidden flex items-center justify-center transition-opacity duration-300">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto p-6 md:p-8 transform transition-transform scale-95">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto p-6 md:p-8 transform transition-transform scale-95 modal-content">
             <h2 class="text-2xl font-bold text-purple-600 mb-4 text-center">Owner Access Required</h2>
             <p class="text-center text-gray-600 mb-6">Enter the owner password to access the Cat Profile Manager.</p>
             <form id="password-form" onsubmit="handlePasswordSubmit(event)">
-                <input type="password" id="manager-password" placeholder="Password (ownerpass)" required
+                <input type="password" id="manager-password" placeholder="Password" required
                     class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500 text-center text-lg">
                 <p id="password-error" class="text-red-500 text-sm mt-2 text-center hidden">Incorrect password.</p>
                 <button type="submit" class="w-full bg-pink-500 hover:bg-purple-600 text-white font-bold py-3 mt-5 rounded-lg transition duration-300 shadow-lg">
@@ -688,7 +721,7 @@
                         class="w-full p-3 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
 
                     <div class="flex space-x-4">
-                        <button type="submit" class="w-full bg-pink-500 hover:bg-purple-600 text-white font-bold py-3 rounded-lg transition duration-300 shadow-lg">
+                        <button type="submit" id="save-profile-btn" class="w-full bg-pink-500 hover:bg-purple-600 text-white font-bold py-3 rounded-lg transition duration-300 shadow-lg">
                             Save Profile
                         </button>
                         <button type="button" onclick="resetForm()" class="w-1/3 bg-white border border-gray-300 text-gray-700 font-bold py-3 rounded-lg transition hover:bg-gray-100">
