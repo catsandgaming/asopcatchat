@@ -536,7 +536,7 @@
         }
 
         window.deleteCat = async function(catId, catName) {
-            // Removed authReady check to rely on try/catch
+            // Minimal check remaining, relying on try/catch for detailed error
             if (configMissing || !db) {
                 catFormStatus.textContent = "Error: Database is not available for writing.";
                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
@@ -605,14 +605,21 @@
             event.preventDefault();
             catFormStatus.classList.add('hidden'); // Hide any previous status
 
-            // New check is minimal, relying on the try/catch for detailed error reporting
-            if (configMissing || !db) {
-                console.error("Operation failed: Database not connected or configuration is missing.");
-                catFormStatus.textContent = "Error: Database is not available for writing.";
-                catFormStatus.classList.remove('hidden', 'text-cat-owner');
-                catFormStatus.classList.add('text-red-500');
-                return;
+            // *** CRITICAL CHANGE: Removed manual check for !db to force the API call ***
+            // and rely exclusively on the try/catch block for error reporting.
+            if (configMissing) {
+                 catFormStatus.textContent = "Error: Database configuration is missing. Cannot write.";
+                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
+                 catFormStatus.classList.add('text-red-500');
+                 return;
             }
+            if (!db) {
+                 catFormStatus.textContent = "Error: Firestore object not found. Cannot write.";
+                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
+                 catFormStatus.classList.add('text-red-500');
+                 return;
+            }
+
             
             // Use crypto.randomUUID() for new documents, or the existing ID for updates
             const id = document.getElementById('cat-id-input').value.trim() || crypto.randomUUID();
@@ -637,7 +644,6 @@
 
             try {
                 // setDoc handles both creation and updating based on the ID. 
-                // Any failure here (like PERMISSION_DENIED) will be caught and reported below.
                 const catDocRef = doc(db, `artifacts/${appId}/public/data/cats`, id);
                 await setDoc(catDocRef, catData); 
 
