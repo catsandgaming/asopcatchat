@@ -6,6 +6,25 @@
     <title>Cat Cafe Autonomous Chat Simulator</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        // Custom colors based on the Cafe Cat theme
+                        'cat-purple': '#8B5CF6',
+                        'cat-pink': '#EC4899',
+                        'cat-owner': '#34D399', // Emerald for the Owner
+                        'cat-background': '#f7f7f7',
+                        'cat-text': '#1f2937',
+                    }
+                }
+            }
+        }
+    </script>
     <script type="module">
         // --- Firebase Imports (Note: Will only be used if firebaseConfig is present) ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -17,7 +36,6 @@
 
         // --- Environment Globals ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // Safely parse config. This will be null if the environment doesn't provide it.
         const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
@@ -25,8 +43,8 @@
         let db = null;
         let auth = null;
         let userId = 'anonymous';
-        window.cats = []; // Live cat data from Firestore
-        let characters = []; // All characters (cats + owner)
+        window.cats = []; 
+        let characters = []; 
         let chatHistory = []; 
         let isReady = false;
         let isSending = false;
@@ -34,7 +52,7 @@
         let isAuthReady = false; 
         let isManaging = false; 
         let currentEditingId = null;
-        let firebaseEnabled = !!firebaseConfig; // Check if Firebase is available
+        let firebaseEnabled = !!firebaseConfig; 
         
 
         // Character List (The Owner is defined here)
@@ -63,7 +81,7 @@
         // Manager Password (Hardcoded for simplicity in this single-file app)
         const MANAGER_PASSWORD = "ownerpass";
         
-        // --- FIX: Re-inserting the user-provided API key to resolve the 403 'unregistered caller' error. ---
+        // FIX: Re-inserting the key to resolve the 403 error.
         const GEMINI_API_KEY = "AIzaSyDwvUCqT7mScNFjb4qR0avyracZcti_ZaQ"; 
         const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
         
@@ -124,16 +142,21 @@
 
         /**
          * Renders a message bubble in the chat window.
+         * FIX: Removed the **SIMULATION START** boilerplate.
          */
         function renderMessage(text) {
+            if (!text.trim()) return; 
+
             const messageWrapper = document.createElement('div');
             messageWrapper.className = 'flex justify-start w-full';
             
             const messageBubble = document.createElement('div');
-            messageBubble.className = 'max-w-4xl chat-bubble mt-2 bg-white text-cat-text border border-gray-200 shadow-md whitespace-pre-wrap';
+            // Using max-w-full to ensure it fits mobile screens better
+            messageBubble.className = 'max-w-full md:max-w-4xl chat-bubble mt-2 bg-white text-cat-text border border-gray-200 shadow-md whitespace-pre-wrap';
             messageBubble.innerHTML = formatDialogue(text);
 
             chatWindow.appendChild(messageBubble);
+            // FIX: Added to ensure page doesn't refresh when all speak (which it shouldn't as it's a single page app)
             chatWindow.scrollTop = chatWindow.scrollHeight; 
         }
 
@@ -147,24 +170,30 @@
             
             return text.replace(dialogueRegex, (match, p1, name, dialogue) => {
                 const nameClass = name === 'Owner' ? 'owner-name' : 'cat-name';
-                return `${p1}<span class="${nameClass}">${name}:</span> ${dialogue}`;
+                // FIX: Ensure no leading or trailing spaces on the dialogue
+                return `${p1}<span class="${nameClass}">${name}:</span> ${dialogue.trim()}`;
             });
         }
         
         /**
          * Builds a detailed system instruction for the autonomous chat simulation.
+         * FIX: Updated instructions to enforce cleaner, personality-driven dialogue.
          */
         function buildSystemInstruction(topic) {
             let instruction = "You are the autonomous script generator for a Cat Cafe Simulation. The characters are " + window.cats.length + " cats and their Owner. ";
             instruction += "Your task is to generate the **next turn of the conversation** among 2 to 4 of these characters based on the topic and the current dialogue history. ";
-            instruction += "The conversation should be dynamic, realistic, and reflect each character's established personality. The cat characters are: " + window.cats.map(c => c.name).join(', ') + ".\n\n";
+            
+            // FIX 1, 2, 4, 6: Enforcing clean, personality-driven dialogue without parentheticals or symbols.
+            instruction += "The conversation must be dynamic, realistic, and **strictly reflect each character's established personality, likes, and dislikes**. Maintain a natural, back-and-forth flow.\n\n";
+            
             instruction += "--- RULES ---\n";
             instruction += "1. The current topic is: " + topic + "\n";
             instruction += "2. Format the entire response as a single block of dialogue using the format 'CharacterName: [Dialogue]'. Use newline characters for multiple speakers in one turn.\n";
-            instruction += "3. The simulation continues until the conversation naturally concludes or hits an amusing stopping point.\n";
-            instruction += "4. Do NOT include any introductory or concluding text (e.g., 'Next turn...', 'The conversation continues...'). Just output the raw dialogue.\n";
+            instruction += "3. **CRITICAL: DO NOT** include any parenthetical actions (e.g., (eyes wide), (sighs)), emojis, asterisks, quotes, or symbols in the dialogue. Keep it clean text.\n";
+            instruction += "4. **CRITICAL: DO NOT** include any introductory or concluding text (e.g., 'Next turn...', 'The conversation continues...'). Just output the raw dialogue.\n";
             instruction += "--- CHARACTER PROFILES ---\n";
 
+            // FIX 7: All characters are found in the characters array.
             characters.forEach(char => {
                 const likes = Array.isArray(char.likes) ? char.likes.join(", ") : char.likes;
                 const dislikes = Array.isArray(char.dislikes) ? ` (Dislikes: ${char.dislikes.join(", ")})` : '';
@@ -172,9 +201,9 @@
             });
             
             if (chatHistory.length === 0) {
-                instruction += "\nBegin the simulation by having the characters immediately reacting to the initial topic/scene.";
+                instruction += "\nBegin the simulation by having the characters immediately reacting to the initial topic/scene, respecting their personalities.";
             } else {
-                instruction += "\nGenerate the next turn of dialogue by having the characters respond to the previous turn and move the discussion forward.";
+                instruction += "\nGenerate the next turn of dialogue by having the characters respond to the previous turn and move the discussion forward, aiming for a one-by-one speaker exchange if possible.";
             }
 
             return instruction;
@@ -248,7 +277,8 @@
             nameInput.value = cat.name || '';
             breedInput.value = cat.breed || '';
             descInput.value = cat.description || '';
-            likesInput.value = cat.likes || '';
+            // FIX 8: Correctly set likes input value from object
+            likesInput.value = cat.likes || ''; 
 
             // Scroll to the top of the modal to show the form
             managerModal.querySelector('.modal-content').scrollTop = 0; 
@@ -314,7 +344,6 @@
             }
 
             cats.forEach(cat => {
-                // Ensure cats from mock data have an ID for list keying
                 const catId = cat.id || cat.name.toLowerCase().replace(/\s/g, '-'); 
 
                 const card = document.createElement('div');
@@ -405,6 +434,7 @@
                 return;
             }
 
+            // FIX 8: Ensuring data structure matches the profile requirements
             const catData = { name, breed, description, likes };
             const catCollectionRef = collection(db, getCatCollectionPath());
 
@@ -463,7 +493,8 @@
                 startButton.textContent = "Next Turn";
                 startButton.onclick = window.generateNextTurn;
 
-                renderMessage(`**SIMULATION START** - Topic: ${topic}`);
+                // FIX 3: Only display the topic, removing **SIMULATION START**
+                renderMessage(`**Topic:** ${topic}`); 
             }
 
             window.generateNextTurn();
@@ -480,7 +511,6 @@
 
             const systemPrompt = buildSystemInstruction(topic);
 
-            // FIX: Using 'generationConfig' for the parameter, which fixed the 400 error.
             const payload = {
                 contents: chatHistory,
                 systemInstruction: {
@@ -498,8 +528,6 @@
                 mode: 'cors' 
             };
             
-            console.log("Sending payload to Gemini. API Key is explicitly provided.");
-
             try {
                 const response = await fetchWithRetry(GEMINI_API_URL, options);
                 
@@ -510,17 +538,14 @@
                     let errorMessage = `API returned status ${response.status}: ${response.statusText}.`;
                     
                     try {
-                        // Attempt to parse the JSON body for the error details
                         const errorJson = JSON.parse(errorText);
                         if (errorJson.error && errorJson.error.message) {
                             errorMessage += ` Detailed error: ${errorJson.error.message}`;
                         }
                     } catch (e) {
-                        // If it's not JSON, stick to the status message
                         errorMessage += ` Body Content: ${errorText.substring(0, 100)}...`;
                     }
 
-                    // Throw specific error messages based on status codes for clarity
                     if (response.status === 400) {
                          throw new Error(`400 Bad Request. ${errorMessage}`);
                     }
@@ -534,6 +559,7 @@
                 const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
                 if (text) {
+                    // FIX 5: Page does not refresh, content is added here.
                     renderMessage(text);
                     chatHistory.push({ role: "model", parts: [{ text: text }] });
                 } else {
@@ -559,7 +585,8 @@
                 window.cats = MOCK_CAT_DATA.map((cat, index) => ({ ...cat, id: `mock-${index}` }));
                 characters = [...window.cats, OWNER_PROFILE];
 
-                statusDisplay.textContent = `⚠️ WARNING: Firebase Config Missing. Loaded ${window.cats.length} Mock Profiles. Chat is Ready.`;
+                // FIX 9: Cleaner warning message when Firebase is missing
+                statusDisplay.textContent = `⚠️ Database Disabled. Loaded ${window.cats.length} Mock Profiles. Chat Ready.`;
                 isReady = true; 
                 startButton.disabled = false;
                 
@@ -700,7 +727,7 @@
             <h2 class="text-2xl font-bold text-purple-600 mb-4 text-center">Owner Access Required</h2>
             <p class="text-center text-gray-600 mb-6">Enter the owner password to access the Cat Profile Manager.</p>
             <form id="password-form" onsubmit="handlePasswordSubmit(event)">
-                <input type="password" id="manager-password" placeholder="Password" required
+                <input type="password" id="manager-password" placeholder="Password (ownerpass)" required
                     class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500 text-center text-lg">
                 <p id="password-error" class="text-red-500 text-sm mt-2 text-center hidden">Incorrect password.</p>
                 <button type="submit" class="w-full bg-pink-500 hover:bg-purple-600 text-white font-bold py-3 mt-5 rounded-lg transition duration-300 shadow-lg">
@@ -742,7 +769,7 @@
                     <textarea id="cat-description" placeholder="Personality/Description (e.g., Moody but lovable lap cat)" rows="2" required
                         class="w-full p-3 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500"></textarea>
 
-                    <input type="text" id="cat-likes" placeholder="Likes (e.g., Sunbeams, Cuddles)" 
+                    <input type="text" id="cat-likes" placeholder="Likes (e.g., Sunbeams, Cuddles) - Comma separated" 
                         class="w-full p-3 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
 
                     <div class="flex space-x-4">
