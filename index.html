@@ -63,9 +63,10 @@
         // Manager Password (Hardcoded for simplicity in this single-file app)
         const MANAGER_PASSWORD = "ownerpass";
         
-        // --- FIX: Explicitly hardcoding the user's provided key to bypass environment conflicts ---
-        const GEMINI_API_KEY = "AIzaSyDwvUCqT7mScNFjb4qR0avyracZcti_ZaQ"; 
+        // --- FIX: Reverting to empty string for API Key as required by the environment for injection ---
+        const GEMINI_API_KEY = ""; 
         const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+        // NOTE: The environment is expected to inject the key when it is an empty string.
 
         // --- DOM Elements ---
         const chatWindow = document.getElementById('chat-window');
@@ -479,12 +480,15 @@
 
             const systemPrompt = buildSystemInstruction(topic);
 
+            // FIX: Changed 'config' to 'generationConfig' to match the Gemini API payload requirements.
             const payload = {
                 contents: chatHistory,
                 systemInstruction: {
                     parts: [{ text: systemPrompt }]
                 },
-                config: { temperature: 0.8 }
+                generationConfig: { 
+                    temperature: 0.8 
+                }
             };
             
             const options = {
@@ -494,7 +498,7 @@
                 mode: 'cors' 
             };
             
-            console.log("Sending payload to Gemini. Key is hardcoded.");
+            console.log("Sending payload to Gemini. Check console for detailed error if 400 persists.");
 
             try {
                 const response = await fetchWithRetry(GEMINI_API_URL, options);
