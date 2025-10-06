@@ -540,6 +540,7 @@
                 setManagerStatus(`ERROR: Database connection failed during initialization. Roster management is disabled.`, true);
                 addCatBtn.disabled = true;
             } else {
+                // If connected, ensure the button is enabled initially
                 addCatBtn.disabled = false;
             }
         }
@@ -583,16 +584,23 @@
                 const catElement = document.createElement('div');
                 catElement.className = 'flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm';
                 
+                // Determine if deletion button should be active
+                const deleteButtonHtml = db ? 
+                    `<button onclick="deleteCatProfileFromFirestore('${cat.id}')"
+                            class="bg-cat-red hover:bg-red-700 text-white text-xs font-semibold py-1 px-3 rounded-full transition duration-150">
+                        Delete
+                    </button>` :
+                    `<button disabled class="bg-gray-400 text-white text-xs font-semibold py-1 px-3 rounded-full opacity-50 cursor-not-allowed">
+                        DB Disabled
+                    </button>`;
+
                 catElement.innerHTML = `
                     <div class="flex-grow mr-4">
                         <p class="font-bold text-cat-purple">${cat.name} <span class="text-sm font-normal text-gray-500">(${cat.breed})</span></p>
                         <p class="text-xs text-gray-600 truncate">${cat.personality}</p>
                     </div>
                     <div class="flex space-x-2">
-                        <button onclick="deleteCatProfileFromFirestore('${cat.id}')"
-                                class="bg-cat-red hover:bg-red-700 text-white text-xs font-semibold py-1 px-3 rounded-full transition duration-150">
-                            Delete
-                        </button>
+                        ${deleteButtonHtml}
                     </div>
                 `;
                 catListElement.appendChild(catElement);
@@ -644,10 +652,11 @@
         window.deleteCatProfileFromFirestore = async function(docId) {
             if (!db || !docId) { // Check for database connection before proceeding
                 if (!db) setManagerStatus(`ERROR: Database is not connected. Cannot delete cat profile.`, true);
+                // Note: The delete button is disabled/hidden in renderCatList if !db
                 return;
             }
 
-            addCatBtn.disabled = true;
+            addCatBtn.disabled = true; // Disable Add button while performing delete operation
             setManagerStatus(`<svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Please wait... Deleting cat from roster.`);
 
             try {
@@ -659,7 +668,7 @@
                 console.error("Error deleting document: ", error);
                 setManagerStatus(`ERROR: Could not delete cat profile. Check console.`, true);
             } finally {
-                addCatBtn.disabled = false;
+                addCatBtn.disabled = false; // Re-enable Add button
             }
         }
         
