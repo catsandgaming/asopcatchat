@@ -343,8 +343,12 @@
                     messagingSenderId: "DUMMY", 
                     appId: "DUMMY" 
                 };
-                statusDisplay.textContent = "⚠️ WARNING: Config Missing. Data cannot be loaded. Run in Canvas editor.";
-                console.warn("Using dummy Firebase config. Database functionality is disabled.");
+                statusDisplay.textContent = "⚠️ WARNING: Using DUMMY Config. Database WRITE functionality is DISABLED.";
+                console.warn("Using dummy Firebase config. Database WRITE functionality is disabled.");
+                loadPlaceholderCats();
+                startButton.disabled = false;
+                checkUrlHash(); 
+                return;
             } else {
                 statusDisplay.textContent = "Initializing...";
             }
@@ -356,13 +360,6 @@
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
-                if (configMissing) {
-                    loadPlaceholderCats();
-                    startButton.disabled = false;
-                    checkUrlHash(); 
-                    return;
-                }
-
                 const authPromise = initialAuthToken 
                     ? signInWithCustomToken(auth, initialAuthToken)
                     : signInAnonymously(auth);
@@ -410,7 +407,6 @@
             characters = [...window.cats, OWNER_PROFILE];
             isReady = true;
             startButton.disabled = false;
-            statusDisplay.textContent = "⚠️ WARNING: Using placeholder data. Ready to start!";
         }
 
 
@@ -536,9 +532,9 @@
         }
 
         window.deleteCat = async function(catId, catName) {
-            // Minimal check remaining, relying on try/catch for detailed error
-            if (configMissing || !db) {
-                catFormStatus.textContent = "Error: Database is not available for writing.";
+            // Check that the database object exists before proceeding
+            if (!db) {
+                catFormStatus.textContent = "Error: Database is not initialized for writing. Configuration may be missing or failed to load.";
                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
                 catFormStatus.classList.add('text-red-500');
                 return;
@@ -605,21 +601,13 @@
             event.preventDefault();
             catFormStatus.classList.add('hidden'); // Hide any previous status
 
-            // *** CRITICAL CHANGE: Removed manual check for !db to force the API call ***
-            // and rely exclusively on the try/catch block for error reporting.
-            if (configMissing) {
-                 catFormStatus.textContent = "Error: Database configuration is missing. Cannot write.";
-                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
-                 catFormStatus.classList.add('text-red-500');
-                 return;
-            }
+            // CRITICAL: Check only for the database object state.
             if (!db) {
-                 catFormStatus.textContent = "Error: Firestore object not found. Cannot write.";
+                 catFormStatus.textContent = "Error: Database is not initialized for writing. Configuration may be missing or failed to load.";
                  catFormStatus.classList.remove('hidden', 'text-cat-owner');
                  catFormStatus.classList.add('text-red-500');
                  return;
             }
-
             
             // Use crypto.randomUUID() for new documents, or the existing ID for updates
             const id = document.getElementById('cat-id-input').value.trim() || crypto.randomUUID();
