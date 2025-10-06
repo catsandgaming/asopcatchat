@@ -63,7 +63,7 @@
         // Manager Password (Hardcoded for simplicity in this single-file app)
         const MANAGER_PASSWORD = "ownerpass";
         
-        // --- FIX: Using the provided API key ---
+        // --- FIX: Explicitly hardcoding the user's provided key to bypass environment conflicts ---
         const GEMINI_API_KEY = "AIzaSyDwvUCqT7mScNFjb4qR0avyracZcti_ZaQ"; 
         const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -493,16 +493,36 @@
                 body: JSON.stringify(payload),
                 mode: 'cors' 
             };
+            
+            console.log("Sending payload to Gemini. Key is hardcoded.");
 
             try {
                 const response = await fetchWithRetry(GEMINI_API_URL, options);
                 
                 if (!response.ok) {
-                    // This error should now only appear if the key is invalid or there's a network issue
-                    if (response.status === 403) {
-                         throw new Error(`API Authorization Failure (403). The provided API key is invalid or restricted.`);
+                    const errorText = await response.text();
+                    console.error("API Error Response Body:", errorText);
+
+                    let errorMessage = `API returned status ${response.status}: ${response.statusText}.`;
+                    
+                    try {
+                        // Attempt to parse the JSON body for the error details
+                        const errorJson = JSON.parse(errorText);
+                        if (errorJson.error && errorJson.error.message) {
+                            errorMessage += ` Detailed error: ${errorJson.error.message}`;
+                        }
+                    } catch (e) {
+                        // If it's not JSON, stick to the status message
+                        errorMessage += ` Body Content: ${errorText.substring(0, 100)}...`;
                     }
-                    throw new Error(`API returned status ${response.status}: ${response.statusText}`);
+
+                    if (response.status === 400) {
+                         throw new Error(`400 Bad Request. ${errorMessage}`);
+                    }
+                    if (response.status === 403) {
+                         throw new Error(`403 Forbidden. Your API key may be invalid or restricted. ${errorMessage}`);
+                    }
+                    throw new Error(errorMessage);
                 }
 
                 const result = await response.json();
