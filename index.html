@@ -20,71 +20,130 @@
                         'cat-owner': '#34D399', // Emerald for the Owner
                         'cat-background': '#f7f7f7',
                         'cat-text': '#1f2937',
+                        'cat-cream': '#fef3c7'
                     }
                 }
             }
         }
     </script>
-    <script type="module">
-        // --- Firebase Imports (Note: Will only be used if firebaseConfig is present) ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, query, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--tw-colors-cat-background);
+            min-height: 100vh;
+        }
+        .chat-container-main {
+            height: calc(100vh - 150px); /* Adjust height for main content area */
+            overflow-y: auto;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .chat-bubble {
+            border-radius: 1rem;
+            padding: 0.75rem 1.25rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        /* Custom formatting for cat/owner names in dialogue */
+        .cat-name {
+            font-weight: 800; /* Extra bold */
+            color: var(--tw-colors-cat-purple);
+        }
+        .owner-name {
+            font-weight: 800;
+            color: var(--tw-colors-cat-owner); /* Green for Owner */
+        }
+        .input-area {
+            position: sticky;
+            bottom: 0;
+            background-color: white;
+            padding: 1rem;
+            border-top: 1px solid #e5e7eb;
+            box-shadow: 0 -4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
 
+    <!-- Header -->
+    <header class="bg-cat-purple shadow-xl p-4 md:p-6 sticky top-0 z-10">
+        <h1 class="text-3xl font-extrabold text-white text-center flex items-center justify-center">
+            <span class="inline-block mr-2 text-4xl">🐈</span> A Slice Of Purrfection Cat Chat!
+        </h1>
+        <p class="text-sm text-cat-cream text-center mt-1">Enter a topic, and click 'Next Turn' to watch the conversation unfold!</p>
+        <p id="status-display" class="text-xs text-cat-cream text-center mt-1 font-mono">Loading...</p>
+    </header>
+
+    <!-- Main Chat Window -->
+    <main class="flex-grow p-4 pb-0 md:p-6 md:pb-0 chat-container-main">
+        <div id="chat-window" class="space-y-4">
+            <!-- Messages will be injected here -->
+            <div id="initial-message" class="flex justify-center my-8">
+                <div class="text-center chat-bubble bg-white border border-cat-purple/30 max-w-sm">
+                    <p class="font-semibold text-gray-700 mb-2">Simulation Ready</p>
+                    <p class="text-sm text-gray-500">Waiting for you to start the discussion.</p>
+                </div>
+            </div>
+            <div id="loading-spinner" class="hidden flex justify-center py-8">
+                <svg class="animate-spin h-8 w-8 text-cat-purple" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+        </div>
+    </main>
+
+    <!-- Input/Control Area -->
+    <div class="input-area">
+        <div class="max-w-4xl mx-auto flex flex-col space-y-3">
+            <input 
+                type="text" 
+                id="initial-prompt" 
+                placeholder="Enter the initial scene/topic here (e.g., A customer just ordered a tuna sandwich)."
+                value="The cafe just replaced the old, worn-out scratching post with a new, very modern, pastel-pink cat tower."
+                class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cat-purple text-cat-text"
+                onkeydown="if(event.key === 'Enter' && !isSending) document.getElementById('start-button').click()">
+            
+            <button id="start-button" onclick="startChat()" disabled
+                    class="w-full bg-cat-purple hover:bg-cat-pink text-white font-semibold py-3 px-5 rounded-lg transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-lg">
+                Start Chat
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase & Gemini API Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        // FIX: Import onAuthStateChanged to properly wait for authentication before fetching data
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // FIX: Import setLogLevel to enable Firebase debugging
+        import { getFirestore, collection, query, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Environment Globals ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) ? JSON.parse(__firebase_config) : null;
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const apiKey = ""; // API Key for Gemini
         
         // --- State Variables ---
         let db = null;
         let auth = null;
-        let userId = 'anonymous';
-        window.cats = []; 
-        let characters = []; 
-        let chatHistory = []; 
+        let cats = [];
+        let characters = []; // cats + owner
+        let chatHistory = [];
         let isReady = false;
         let isSending = false;
         let chatStarted = false;
-        let isAuthReady = false; 
-        let isManaging = false; 
-        let currentEditingId = null;
-        const firebaseEnabled = !!firebaseConfig; 
-        
 
         // Character List (The Owner is defined here)
         const OWNER_PROFILE = {
             name: "Owner",
             breed: "Human",
             personality: "Caring, busy, slightly exasperated, focused on cafe operations and keeping the cats happy (and off the tables).",
-            likes: "Happy cats, Coffee, Quiet afternoons",
-            dislikes: "Vet visits, Knocked-over food displays"
+            likes: ["Happy cats", "Coffee", "Quiet afternoons"],
+            dislikes: ["Vet visits", "Knocked-over food displays"]
         };
         
-        // Initial placeholder data (used only to populate Firestore on first run or be used directly if Firebase is disabled)
-        const MOCK_CAT_DATA = [
-            { name: "Ronnie", breed: "Siamese", description: "Vocal and demanding, often complaining about the smallest things.", likes: "Attention, Warm spots" },
-            { name: "Jigsaw", breed: "Tabby", description: "Adept at puzzles, often found staring intently at objects.", likes: "Feather toys, Quiet observation" },
-            { name: "Bear", breed: "Maine Coon", description: "Large and gentle, but a clumsy bully who pushes smaller toys.", likes: "Cuddles, Big naps" },
-            { name: "Jet", breed: "Black Cat", description: "Sleek and mysterious, spends most of its time watching birds.", likes: "High places, Shadows" },
-            { name: "Shadow", breed: "Sphynx", description: "Naked and perpetually cold, constantly seeking warm laps.", likes: "Sweaters, Heat vents" },
-            { name: "Thor", breed: "Ragdoll", description: "Sweet and floppy, but has a dramatic flair for 'fainting'.", likes: "Belly rubs, Soft blankets" },
-            { name: "Marble", breed: "Calico", description: "A true diva, highly photogenic, and knows it. Demands the best spots.", likes: "Cameras, Sunbeams" },
-            { name: "Banjo", breed: "Munchkin", description: "Short-legged and perpetually playful, always tripping over air.", likes: "Laser pointers, Chasing dust" },
-            { name: "Button", breed: "Scottish Fold", description: "Sweetest cat in the cafe, but prone to anxiety. Hides inside boxes.", likes: "Owner, Inside boxes" },
-            { name: "Dash", breed: "Bengal", description: "High-energy and athletic, constantly running laps and climbing.", likes: "Running, Climbing" }
-        ];
-
-        // Manager Password (Hardcoded for simplicity in this single-file app)
-        const MANAGER_PASSWORD = "ownerpass";
-        
-        // API Key is explicitly provided here.
-        const GEMINI_API_KEY = "AIzaSyDwvUCqT7mScNFjb4qR0avyracZcti_ZaQ"; 
-        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
-        
-
         // --- DOM Elements ---
         const chatWindow = document.getElementById('chat-window');
         const initialPromptInput = document.getElementById('initial-prompt');
@@ -93,33 +152,72 @@
         const loadingSpinner = document.getElementById('loading-spinner');
         const initialMessage = document.getElementById('initial-message');
         
-        // Manager DOM Elements
-        const managerModal = document.getElementById('cat-manager-modal');
-        const catListContainer = document.getElementById('cat-list-container');
-        const catForm = document.getElementById('cat-form');
-        const formTitle = document.getElementById('form-title');
-        const formMessage = document.getElementById('form-message');
-        const nameInput = document.getElementById('cat-name');
-        const breedInput = document.getElementById('cat-breed');
-        const descInput = document.getElementById('cat-description');
-        const likesInput = document.getElementById('cat-likes');
-        const catCountSpan = document.getElementById('cat-count');
-
-        // Password Modal DOM Elements
-        const passwordModal = document.getElementById('password-modal');
-        const passwordInput = document.getElementById('manager-password');
-        const passwordError = document.getElementById('password-error');
-        
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
         // --- Utility Functions ---
 
         /**
-         * Returns the public Firestore collection path for cats.
+         * Builds a detailed system instruction for the autonomous chat simulation.
          */
-        function getCatCollectionPath() {
-            return `artifacts/${appId}/public/data/cat_profiles`;
+        function buildSystemInstruction(topic, history) {
+            let instruction = "You are the autonomous script generator for a Cat Cafe Simulation. The characters are a group of cats and their Owner. ";
+            instruction += "Your task is to generate the **next turn of the conversation** among 2 to 4 of these characters based on the topic and the current dialogue history. ";
+            instruction += "The conversation should be dynamic, realistic, and reflect each character's established personality.\n\n";
+            instruction += "--- RULES ---\n";
+            instruction += "1. The current topic is: " + topic + "\n";
+            instruction += "2. Format the entire response as a single block of dialogue using the format 'CharacterName: [Dialogue]'. Use newline characters for multiple speakers in one turn.\n";
+            instruction += "3. The simulation continues until the conversation naturally concludes or hits an amusing stopping point.\n";
+            instruction += "4. Do NOT include any introductory or concluding text (e.g., 'Next turn...', 'The conversation continues...'). Just output the raw dialogue.\n";
+            instruction += "--- CHARACTER PROFILES ---\n";
+
+            characters.forEach(char => {
+                const likes = char.likes.join(", ");
+                const dislikes = char.dislikes.length > 0 ? ` (Dislikes: ${char.dislikes.join(", ")})` : '';
+                instruction += `- ${char.name} (${char.breed}): ${char.personality}. Loves: ${likes}.${dislikes}\n`;
+            });
+            
+            if (history.length === 1) { // First turn
+                instruction += "\nBegin the simulation by having the characters immediately reacting to the initial topic/scene.";
+            } else {
+                instruction += "\nGenerate the next turn of dialogue by having the characters respond to the previous turn and move the discussion forward. If a character has expressed discontent (like missing a warm spot), have a different character or the Owner react to that statement.";
+            }
+
+            return instruction;
         }
 
+        /**
+         * Renders a message bubble in the chat window.
+         */
+        function renderMessage(text) {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = 'flex justify-start w-full';
+            
+            const messageBubble = document.createElement('div');
+            // Check for the specific "napping" message to apply error styling
+            const isError = text.includes("The simulation hit a wall");
+            
+            messageBubble.className = `max-w-4xl chat-bubble mt-2 text-cat-text border shadow-md whitespace-pre-wrap ${isError ? 'bg-red-100 border-red-400' : 'bg-white border-gray-200'}`;
+            messageBubble.innerHTML = formatDialogue(text);
+
+            messageWrapper.appendChild(messageBubble);
+            chatWindow.appendChild(messageWrapper);
+            chatWindow.scrollTop = chatWindow.scrollHeight; 
+        }
+
+        /**
+         * Formats the cat dialogue by highlighting names.
+         */
+        function formatDialogue(text) {
+             // Regex to find 'CharacterName: ' at the start of a line or after a newline
+            const charNames = characters.map(c => c.name).join('|');
+            const dialogueRegex = new RegExp(`(^|\\n)(${charNames}): (.*)`, 'g');
+            
+            return text.replace(dialogueRegex, (match, p1, name, dialogue) => {
+                const nameClass = name === 'Owner' ? 'owner-name' : 'cat-name';
+                return `${p1}<span class="${nameClass}">${name}:</span> ${dialogue}`;
+            });
+        }
+        
         /**
          * Makes a robust API call with exponential backoff.
          */
@@ -139,332 +237,116 @@
             throw new Error("API call failed after multiple retries.");
         }
 
-        /**
-         * Renders a message bubble in the chat window.
-         */
-        function renderMessage(text) {
-            if (!text.trim()) return; 
 
-            const messageWrapper = document.createElement('div');
-            messageWrapper.className = 'flex justify-start w-full';
-            
-            const messageBubble = document.createElement('div');
-            messageBubble.className = 'max-w-full md:max-w-4xl chat-bubble mt-2 bg-white text-cat-text border border-gray-200 shadow-md whitespace-pre-wrap';
-            messageBubble.innerHTML = formatDialogue(text);
+        // --- Firebase Initialization and Data Fetching ---
 
-            chatWindow.appendChild(messageBubble);
-            chatWindow.scrollTop = chatWindow.scrollHeight; 
-        }
+        function initializeFirebase() {
+            if (Object.keys(firebaseConfig).length === 0) {
+                // FALLBACK MOCK DATA MODE
+                statusDisplay.textContent = "Database Disabled. Loaded 10 Mock Profiles. Chat Ready. To enable persistence, ensure the Firebase Config is provided.";
+                
+                // Mock Cat Data (for development when no Firebase config is present)
+                const mockCats = [
+                    { name: "Ronnie", breed: "Siamese", personality: "Vain and overly dramatic, highly critical of new objects.", likes: ["Silence", "Cashmere"], dislikes: ["Loud noises", "Cheap plastic"] },
+                    { name: "Noodle", breed: "Calico", personality: "Always hungry and very clumsy. Will trip over air.", likes: ["Food", "Bags"], dislikes: ["Lids", "Empty bowls"] },
+                    { name: "Shadow", breed: "Black Shorthair", personality: "Mysterious and aloof. Only speaks in riddles or existential dread.", likes: ["Dark corners", "Existential dread"], dislikes: ["Joy", "Bright lights"] },
+                    { name: "Patches", breed: "Ragdoll", personality: "The alpha cat, but secretly loves belly rubs.", likes: ["Dominance", "Salmon"], dislikes: ["Being ignored", "Dogs"] },
+                    { name: "Zippy", breed: "Abyssinian", personality: "Hyperactive and playful. Cannot sit still.", likes: ["Laser pointers", "Climbing"], dislikes: ["Naps", "Stillness"] },
+                    { name: "Mittens", breed: "Maine Coon", personality: "A gentle giant, very motherly and protective.", likes: ["Cuddles", "Warm laps"], dislikes: ["Fights", "Cold floors"] },
+                    { name: "Captain", breed: "Scottish Fold", personality: "Old, tired, and obsessed with finding a perfect nap spot.", likes: ["Warm spots", "Comfort"], dislikes: ["Youthful energy", "Change"] },
+                    { name: "Pixel", breed: "Bengal", personality: "Smart and mischievous, always plotting.", likes: ["Puzzles", "Knocking things over"], dislikes: ["Doors", "Rules"] },
+                    { name: "Fluffy", breed: "Persian", personality: "Posh and demanding. Requires constant grooming and adoration.", likes: ["Brushing", "Adoration"], dislikes: ["Dirt", "Commoners"] },
+                    { name: "Toulouse", breed: "Orange Tabby", personality: "Lovable goofball, usually confused but means well.", likes: ["Sunbeams", "Scratches"], dislikes: ["The vacuum", "Thinking"] }
+                ];
 
-        /**
-         * Formats the cat dialogue by highlighting names.
-         */
-        function formatDialogue(text) {
-             // Regex to find 'CharacterName: ' at the start of a line or after a newline
-            const charNames = characters.map(c => c.name).join('|');
-            const dialogueRegex = new RegExp(`(^|\\n)(${charNames}): (.*)`, 'g');
-            
-            return text.replace(dialogueRegex, (match, p1, name, dialogue) => {
-                const nameClass = name === 'Owner' ? 'owner-name' : 'cat-name';
-                return `${p1}<span class="${nameClass}">${name}:</span> ${dialogue.trim()}`;
-            });
-        }
-        
-        /**
-         * Builds a detailed system instruction for the autonomous chat simulation.
-         */
-        function buildSystemInstruction(topic) {
-            let instruction = "You are the autonomous script generator for a Cat Cafe Simulation. The characters are " + window.cats.length + " cats and their Owner. ";
-            instruction += "Your task is to generate the **next turn of the conversation** based on the topic and the current dialogue history. ";
-            
-            // FIX (Point 3): Enforcing single speaker per turn for cleaner flow.
-            instruction += "The conversation must be dynamic, realistic, and **strictly reflect each character's established personality, likes, and dislikes**. \n\n";
-            
-            instruction += "--- RULES ---\n";
-            instruction += "1. The current topic is: " + topic + "\n";
-            instruction += "2. Format the entire response as a single block of dialogue using the format 'CharacterName: [Dialogue]'. **CRITICAL: Only include ONE speaker's turn per API call.**\n";
-            instruction += "3. **CRITICAL: DO NOT** include any parenthetical actions (e.g., (eyes wide), (sighs)), emojis, asterisks, quotes, or symbols in the dialogue. Keep it clean text.\n";
-            instruction += "4. **CRITICAL: DO NOT** include any introductory or concluding text (e.g., 'Next turn...', 'The conversation continues...'). Just output the raw dialogue.\n";
-            instruction += "--- CHARACTER PROFILES ---\n";
-
-            characters.forEach(char => {
-                const likes = char.likes || "None specified";
-                const dislikes = char.dislikes ? ` (Dislikes: ${char.dislikes})` : '';
-                instruction += `- ${char.name} (${char.breed}): ${char.description || char.personality}. Loves: ${likes}.${dislikes}\n`;
-            });
-            
-            if (chatHistory.length === 0) {
-                instruction += "\nBegin the simulation by having the characters immediately reacting to the initial topic/scene, respecting their personalities. Select the most relevant character to speak first.";
-            } else {
-                instruction += "\nGenerate the single next turn of dialogue by having the characters respond to the previous turn and move the discussion forward. Only one character should speak.";
-            }
-
-            return instruction;
-        }
-
-        // --- Manager Logic (Re-implemented with hash) ---
-
-        function checkUrlHash() {
-            if (window.location.hash === '#/manage-cats') {
-                if (!isManaging) {
-                    showPasswordPrompt();
-                }
-            } else {
-                hidePasswordPrompt();
-                toggleCatManager(false); 
-            }
-        }
-
-        function showPasswordPrompt() {
-            passwordModal.classList.remove('hidden');
-            passwordInput.focus();
-        }
-
-        function hidePasswordPrompt() {
-            passwordModal.classList.add('hidden');
-            passwordInput.value = '';
-            passwordError.classList.add('hidden');
-        }
-
-        window.handlePasswordSubmit = function(event) {
-            event.preventDefault();
-            const enteredPassword = passwordInput.value;
-            
-            if (enteredPassword === MANAGER_PASSWORD) {
-                hidePasswordPrompt();
-                toggleCatManager(true);
-            } else {
-                passwordError.classList.remove('hidden');
-                passwordInput.value = '';
-                passwordInput.focus();
-            }
-        }
-
-        // Reusable function to open/close the manager modal based on state
-        function toggleCatManager(open) {
-            isManaging = open;
-            if (open) {
-                managerModal.classList.remove('hidden'); 
-                resetForm(); 
-                if (!firebaseEnabled) {
-                     renderManagerList(window.cats); 
-                }
-            } else {
-                managerModal.classList.add('hidden');
-                resetForm(); 
-            }
-        }
-        
-        window.loadCatForEdit = function(catId) {
-            if (!firebaseEnabled) {
-                showMessage("Database disabled. Cannot edit mock profiles.", 'error');
+                characters = [...mockCats, OWNER_PROFILE];
+                isReady = true;
+                startButton.disabled = false;
+                
+                // Attach event listeners immediately in fallback mode
+                startButton.addEventListener('click', window.startChat);
+                window.generateNextTurn = window.generateNextTurn.bind(this);
                 return;
-            } 
-            const cat = window.cats.find(c => c.id === catId);
-            if (!cat) return;
-
-            currentEditingId = cat.id;
-            formTitle.textContent = `Update Profile: ${cat.name}`;
-
-            nameInput.value = cat.name || '';
-            breedInput.value = cat.breed || '';
-            descInput.value = cat.description || '';
-            likesInput.value = cat.likes || '';
-
-            managerModal.querySelector('.modal-content').scrollTop = 0; 
-        }
-
-        function resetForm() {
-            catForm.reset();
-            currentEditingId = null;
-            formTitle.textContent = 'Add New Cat Profile';
-            formMessage.classList.add('hidden');
-        }
-
-        function showMessage(message, type) {
-            formMessage.textContent = message;
-            formMessage.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700');
-            if (type === 'error') {
-                formMessage.classList.add('bg-red-100', 'text-red-700');
-            } else {
-                formMessage.classList.add('bg-green-100', 'text-green-700');
             }
-            setTimeout(() => {
-                formMessage.classList.add('hidden');
-            }, 3000);
-        }
-
-        // --- Firestore Data Functions ---
-        
-        /**
-         * Populates Firestore with mock data if the collection is empty.
-         */
-        async function checkAndPopulateInitialData() {
-            if (!firebaseEnabled) return;
-
+            
+            // FIREBASE MODE
             try {
-                const catCollection = collection(db, getCatCollectionPath());
-                const querySnapshot = await getDocs(catCollection);
-
-                if (querySnapshot.empty) {
-                    console.log("Collection is empty. Populating with mock data...");
-                    for (const cat of MOCK_CAT_DATA) {
-                        await addDoc(catCollection, cat);
-                    }
-                    console.log("Mock data populated successfully.");
+                // FIX: Set debug log level for better visibility into Firestore operations
+                setLogLevel('debug');
+                
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                if (initialAuthToken) {
+                    signInWithCustomToken(auth, initialAuthToken).catch(e => console.error("Custom token auth failed:", e));
                 } else {
-                    console.log(`Collection already contains ${querySnapshot.size} cats.`);
+                    signInAnonymously(auth).catch(e => console.error("Anonymous auth failed:", e));
                 }
+
+                // FIX: Use onAuthStateChanged to ensure fetchCats is only called after a successful sign-in
+                // This resolves the "Missing or insufficient permissions" error because security rules 
+                // require an authenticated user (even anonymous) to read the public data path.
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        // User is signed in, we can now safely fetch public data
+                        console.log(`User signed in with UID: ${user.uid}. Fetching cat data.`);
+                        fetchCats();
+                    } else {
+                        // This handles the case if sign-in fails or hasn't completed yet
+                        console.log("Waiting for user authentication state...");
+                    }
+                });
+
+                startButton.addEventListener('click', window.startChat); // Attach listener once
+                window.generateNextTurn = window.generateNextTurn.bind(this);
+
             } catch (error) {
-                console.error("Error checking or populating initial data:", error);
+                console.error("Firebase initialization error:", error);
+                statusDisplay.textContent = `Error initializing: ${error.message}`;
             }
         }
-        
-        /**
-         * Renders the list of cat profiles in the manager modal.
-         * @param {Array<Object>} cats - The array of cat objects from Firestore.
-         */
-        function renderManagerList(cats) {
-            catListContainer.innerHTML = ''; 
-            catCountSpan.textContent = cats.length;
 
-            if (cats.length === 0) {
-                catListContainer.innerHTML = '<p class="text-center text-gray-500 py-6 border-dashed border-2 rounded-lg">No cat profiles found in the database. Please add one!</p>';
-                return;
+        function fetchCats() {
+            // Check if db and auth are initialized and a user is signed in
+            if (!db || !auth.currentUser) {
+                 // This should technically not be hit if called from onAuthStateChanged, but acts as a safeguard
+                 console.error("Attempted to fetch data before Firebase was ready or user signed in.");
+                 return;
             }
 
-            cats.forEach(cat => {
-                const catId = cat.id || cat.name.toLowerCase().replace(/\s/g, '-'); 
+            const catCollectionPath = `artifacts/${appId}/public/data/cats`;
+            const q = query(collection(db, catCollectionPath));
 
-                const card = document.createElement('div');
-                card.className = 'flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-white border border-gray-200 rounded-lg shadow-sm';
-                
-                const descriptionSnippet = cat.description.length > 50 
-                    ? cat.description.substring(0, 50).trim() + '...' 
-                    : cat.description;
-                
-                // FIX (Point 1): Buttons clearly disabled when Firebase is not enabled
-                const crudDisabled = firebaseEnabled ? '' : 'disabled opacity-50 cursor-not-allowed';
-                const crudColor = firebaseEnabled ? 'text-cat-owner hover:text-green-700' : 'text-gray-400';
-                const deleteColor = firebaseEnabled ? 'text-red-500 hover:text-red-700' : 'text-gray-400';
+            onSnapshot(q, (querySnapshot) => {
+                cats = [];
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.name) {
+                        cats.push(data);
+                    }
+                });
 
-                card.innerHTML = `
-                    <div>
-                        <p class="text-lg font-bold text-cat-purple">${cat.name}</p>
-                        <p class="text-sm text-gray-600">${cat.breed} - ${descriptionSnippet}</p>
-                        <p class="text-xs text-gray-500 mt-1">Likes: ${cat.likes}</p>
-                    </div>
-                    <div class="flex space-x-2 mt-3 md:mt-0">
-                        <button onclick="${firebaseEnabled ? `window.loadCatForEdit('${catId}')` : `showMessage('Cannot edit mock profiles.', 'error')`}" 
-                                class="text-sm ${crudColor} font-semibold transition ${crudDisabled}" ${crudDisabled}>Edit</button>
-                        <button onclick="${firebaseEnabled ? `window.deleteCat('${catId}', '${cat.name}')` : `showMessage('Cannot delete mock profiles.', 'error')`}" 
-                                class="text-sm ${deleteColor} font-semibold transition ${crudDisabled}" ${crudDisabled}>Delete</button>
-                    </div>
-                `;
-                catListContainer.appendChild(card);
-            });
-        }
+                characters = [...cats, OWNER_PROFILE];
 
-        /**
-         * Sets up the real-time listener for the cat profiles collection.
-         */
-        function setupRealtimeListener() {
-            if (!firebaseEnabled || !db || !isAuthReady) { 
-                console.warn("Firestore not fully configured or ready. Skipping real-time listener setup.");
-                return;
-            }
-
-            const catCollectionRef = collection(db, getCatCollectionPath());
-            
-            onSnapshot(catCollectionRef, (snapshot) => {
-                window.cats = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                
-                // Combine cats and owner for chat instructions
-                characters = [...window.cats, OWNER_PROFILE];
-
-                if (window.cats.length >= 1) { 
+                if (cats.length >= 1) { // Changed from 10 to 1 for flexibility
                     isReady = true;
                     startButton.disabled = false;
-                    statusDisplay.textContent = `${window.cats.length} Cat Profiles + Owner Loaded. Chat Ready! (Persistent)`;
+                    statusDisplay.textContent = `${cats.length} Cat Profiles + Owner Loaded. Ready to start!`;
                 } else {
-                    statusDisplay.textContent = `0 profiles found. Please add a cat via the Manager.`;
-                    isReady = false; 
-                    startButton.disabled = true;
+                    statusDisplay.textContent = `Loaded ${cats.length} cat profiles. Please ensure you have imported at least one cat profile.`;
+                    // Even if 0 cats are loaded, we are ready with the Owner profile, so we set isReady=true
+                    isReady = true;
+                    startButton.disabled = false;
                 }
-                
-                // Re-render the manager list if the modal is open
-                if (isManaging) {
-                     renderManagerList(window.cats); 
-                }
-
             }, (error) => {
-                console.error("Realtime listener failed:", error);
-                statusDisplay.textContent = `Error loading cat data: ${error.message}`;
+                console.error("Error fetching cat data:", error);
+                // Display a user-friendly error message
+                statusDisplay.textContent = "Error loading cat data. Ensure Firestore rules are set up correctly for public read access.";
             });
-
-            checkAndPopulateInitialData();
         }
-
-        // --- Manager Form & CRUD Handlers ---
-
-        catForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            if (!firebaseEnabled) {
-                showMessage("Database disabled. Cannot save profiles without Firebase Config.", 'error');
-                return;
-            }
-
-            const name = nameInput.value.trim();
-            const breed = breedInput.value.trim();
-            const description = descInput.value.trim();
-            const likes = likesInput.value.trim();
-
-            if (!name || !breed || !description) {
-                showMessage("Please fill in the Cat's Name, Breed, and Description.", 'error');
-                return;
-            }
-
-            const catData = { name, breed, description, likes };
-            const catCollectionRef = collection(db, getCatCollectionPath());
-
-            try {
-                if (currentEditingId) {
-                    const docRef = doc(catCollectionRef, currentEditingId);
-                    await setDoc(docRef, catData, { merge: true });
-                    showMessage(`Successfully updated ${name}'s profile!`, 'success');
-                } else {
-                    await addDoc(catCollectionRef, catData);
-                    showMessage(`Successfully added ${name} to the cafe!`, 'success');
-                }
-                resetForm();
-            } catch (error) {
-                console.error("Error saving cat profile:", error);
-                showMessage('Failed to save profile. Check console for details.', 'error');
-            }
-        });
-
-        window.deleteCat = async function(catId, catName) {
-            if (!firebaseEnabled) {
-                showMessage("Database disabled. Cannot delete profiles without Firebase Config.", 'error');
-                return;
-            }
-            
-            try {
-                const docRef = doc(db, getCatCollectionPath(), catId);
-                await deleteDoc(docRef);
-                showMessage('Cat profile deleted successfully.', 'success');
-            } catch (error) {
-                console.error("Error deleting cat profile:", error);
-                showMessage('Failed to delete profile. Check console for details.', 'error');
-            }
-        }
-
-
-        // --- Simulation Logic (Re-integrated) ---
+        
+        // --- Simulation Logic ---
 
         window.startChat = async function() {
             if (!isReady || isSending) return;
@@ -475,7 +357,9 @@
             initialMessage.classList.add('hidden');
             
             if (!chatStarted) {
+                // Initialize for the first turn
                 chatHistory = [];
+                // Add initial scene setting as the first user part
                 chatHistory.push({ role: "user", parts: [{ text: "Initial Scene/Topic: " + topic }] });
                 chatStarted = true;
                 initialPromptInput.disabled = true;
@@ -484,308 +368,83 @@
                 startButton.textContent = "Next Turn";
                 startButton.onclick = window.generateNextTurn;
 
-                // FIX (Point 4): Only display the topic, removing **SIMULATION START** and bold asterisks
-                renderMessage(`Topic: ${topic}`); 
+                // Render the topic message
+                renderMessage(`**SIMULATION START** - Topic: ${topic}`);
             }
 
+            // Immediately generate the first turn
             window.generateNextTurn();
         }
 
         window.generateNextTurn = async function() {
             if (!isReady || isSending) return;
 
+            // Get the topic from the disabled input field
             const topic = initialPromptInput.value.trim();
             
             isSending = true;
             startButton.disabled = true;
             loadingSpinner.classList.remove('hidden');
 
-            const systemPrompt = buildSystemInstruction(topic);
+            const systemPrompt = buildSystemInstruction(topic, chatHistory);
+
+            // FIX: Append a specific, action-oriented query to ensure the model responds.
+            const actionQuery = "Generate the next turn of dialogue/action following the rules, ensuring at least one character reacts to the previous statement to keep the scene active.";
 
             const payload = {
-                contents: chatHistory,
+                // FIX: Send the history, then the new, forceful query.
+                contents: [
+                    ...chatHistory,
+                    { role: "user", parts: [{ text: actionQuery }] }
+                ],
                 systemInstruction: {
                     parts: [{ text: systemPrompt }]
-                },
-                generationConfig: { 
-                    temperature: 0.8 
                 }
             };
             
             const options = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                mode: 'cors' 
+                body: JSON.stringify(payload)
             };
-            
+
+            // Call API and Handle Response
             try {
                 const response = await fetchWithRetry(GEMINI_API_URL, options);
                 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error("API Error Response Body:", errorText);
-
-                    let errorMessage = `API returned status ${response.status}: ${response.statusText}.`;
-                    
-                    try {
-                        const errorJson = JSON.parse(errorText);
-                        if (errorJson.error && errorJson.error.message) {
-                            errorMessage += ` Detailed error: ${errorJson.error.message}`;
-                        }
-                    } catch (e) {
-                        errorMessage += ` Body Content: ${errorText.substring(0, 100)}...`;
-                    }
-
-                    if (response.status === 400) {
-                         throw new Error(`400 Bad Request. ${errorMessage}`);
-                    }
-                    if (response.status === 403) {
-                         throw new Error(`403 Forbidden. Your API key may be invalid or restricted. ${errorMessage}`);
-                    }
-                    throw new Error(errorMessage);
+                    throw new Error(`API returned status ${response.status}: ${response.statusText}`);
                 }
 
                 const result = await response.json();
                 const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-                if (text) {
+                if (text && text.trim().length > 0) {
+                    // Display model message and update history
                     renderMessage(text);
                     chatHistory.push({ role: "model", parts: [{ text: text }] });
                 } else {
+                    // This error means the model returned an empty string, which is the 'napping' state
                     renderMessage("The simulation hit a wall. All characters are napping. Click 'Next Turn' to try waking them.");
+                    console.error("API response missing text content. This often indicates the model couldn't find a logical next step:", result);
                 }
 
             } catch (error) {
                 console.error("Gemini API error:", error);
-                renderMessage(`Error: ${error.message}`);
+                renderMessage(`Error: The network connection failed or the characters are too confused to talk. (${error.message})`);
 
             } finally {
+                // Cleanup
                 isSending = false;
                 startButton.disabled = false;
                 loadingSpinner.classList.add('hidden');
+                chatWindow.scrollTop = chatWindow.scrollHeight; 
             }
         };
 
-        // --- Firebase Initialization ---
 
-        async function initializeFirebase() {
-            if (!firebaseEnabled) {
-                // If config is missing, load mock data directly and set ready state.
-                window.cats = MOCK_CAT_DATA.map((cat, index) => ({ ...cat, id: `mock-${index}` }));
-                characters = [...window.cats, OWNER_PROFILE];
-
-                // FIX (Point 5): Clear explanation for disabled database
-                statusDisplay.innerHTML = `
-                    <span class="font-bold text-yellow-300">⚠️ Database Disabled.</span> Loaded ${window.cats.length} Mock Profiles. Chat Ready. 
-                    <span class="text-white/70">To enable persistence, ensure the Firebase Config is provided.</span>
-                `;
-                isReady = true; 
-                startButton.disabled = false;
-                
-                window.addEventListener('hashchange', checkUrlHash);
-                checkUrlHash();
-                return; 
-            }
-            
-            // FIX (Point 2): Only enable debug logging if Firebase is enabled
-            setLogLevel('debug');
-
-            // If Firebase is enabled, proceed with full initialization
-            try {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        isAuthReady = true;
-                        setupRealtimeListener(); // Start listening for data once auth is ready
-                    } else {
-                        userId = 'unauthenticated';
-                        isAuthReady = false;
-                        statusDisplay.textContent = "Authentication failed.";
-                    }
-                });
-                
-                window.addEventListener('hashchange', checkUrlHash);
-                checkUrlHash(); 
-
-            } catch (error) {
-                console.error("Firebase Initialization/Authentication Error:", error);
-                statusDisplay.textContent = `Initialization Failed: ${error.message}`;
-            }
-        }
-
-        // Initialize Firebase on window load
+        // --- Initialization on Load ---
         window.onload = initializeFirebase;
     </script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--tw-colors-cat-background);
-            min-height: 100vh;
-        }
-        .chat-container-main {
-            height: calc(100vh - 150px);
-            overflow-y: auto;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .chat-bubble {
-            border-radius: 1rem;
-            padding: 0.75rem 1.25rem;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-        }
-        .cat-name {
-            font-weight: 800; 
-            color: #8B5CF6; /* cat-purple */
-        }
-        .owner-name {
-            font-weight: 800;
-            color: #34D399; /* cat-owner */
-        }
-        .input-area {
-            position: sticky;
-            bottom: 0;
-            background-color: white;
-            padding: 1rem;
-            border-top: 1px solid #e5e7eb;
-            box-shadow: 0 -4px 6px -1-2px rgb(0 0 0 / 0.1);
-        }
-        .modal-content {
-            z-index: 100;
-        }
-    </style>
-</head>
-<body class="flex flex-col min-h-screen">
-
-    <!-- Header -->
-    <header class="bg-purple-600 shadow-xl p-4 md:p-6 sticky top-0 z-10">
-        <div class="max-w-4xl mx-auto flex justify-between items-center">
-            <h1 class="text-xl md:text-3xl font-extrabold text-white flex items-center">
-                <span class="inline-block mr-2 text-2xl md:text-4xl">🐈</span> A Slice Of Purrfection Chat
-            </h1>
-            <a href="#/manage-cats" class="bg-pink-500 hover:bg-pink-600 text-white text-sm font-semibold py-2 px-4 rounded-lg transition duration-300 shadow-md">
-                Manage Cats
-            </a>
-        </div>
-        <p id="status-display" class="text-xs text-white/70 text-center mt-1 font-mono">Loading...</p>
-    </header>
-
-    <!-- Main Chat Window -->
-    <main class="flex-grow p-4 pb-0 md:p-6 md:pb-0 chat-container-main">
-        <div id="chat-window" class="space-y-4">
-            <div id="initial-message" class="flex justify-center my-8">
-                <div class="text-center chat-bubble bg-white border border-purple-300 max-w-sm">
-                    <p class="font-semibold text-gray-700 mb-2">Simulation Ready</p>
-                    <p class="text-sm text-gray-500">The cats are in the cafe. Enter the initial scene to begin.</p>
-                </div>
-            </div>
-            <div id="loading-spinner" class="hidden flex justify-center py-8">
-                <svg class="animate-spin h-8 w-8 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-            </div>
-        </div>
-    </main>
-
-    <!-- Input/Control Area -->
-    <div class="input-area">
-        <div class="max-w-4xl mx-auto flex flex-col space-y-3">
-            <input 
-                type="text" 
-                id="initial-prompt" 
-                placeholder="Enter the initial scene/topic here (e.g., A customer just ordered a tuna sandwich)."
-                value="The cafe just replaced the old, worn-out scratching post with a new, very modern, pastel-pink cat tower."
-                class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 text-gray-800"
-                onkeydown="if(event.key === 'Enter' && !isSending) document.getElementById('start-button').click()">
-            
-            <button id="start-button" onclick="startChat()" disabled
-                    class="w-full bg-purple-600 hover:bg-pink-500 text-white font-semibold py-3 px-5 rounded-lg transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-lg shadow-lg">
-                Start Chat
-            </button>
-        </div>
-    </div>
-
-    <!-- Password Prompt Modal -->
-    <div id="password-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[60] hidden flex items-center justify-center transition-opacity duration-300">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto p-6 md:p-8 transform transition-transform scale-95 modal-content">
-            <h2 class="text-2xl font-bold text-purple-600 mb-4 text-center">Owner Access Required</h2>
-            <p class="text-center text-gray-600 mb-6">Enter the owner password to access the Cat Profile Manager.</p>
-            <form id="password-form" onsubmit="handlePasswordSubmit(event)">
-                <input type="password" id="manager-password" placeholder="Password (ownerpass)" required
-                    class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500 text-center text-lg">
-                <p id="password-error" class="text-red-500 text-sm mt-2 text-center hidden">Incorrect password.</p>
-                <button type="submit" class="w-full bg-pink-500 hover:bg-purple-600 text-white font-bold py-3 mt-5 rounded-lg transition duration-300 shadow-lg">
-                    Unlock Manager
-                </button>
-            </form>
-            <div class="text-center mt-4">
-                 <a href="#" onclick="window.location.hash='';" class="text-sm text-gray-500 hover:text-purple-600 transition">Cancel</a>
-            </div>
-        </div>
-    </div>
-
-
-    <!-- Cat Manager Modal -->
-    <div id="cat-manager-modal" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden overflow-y-auto p-4 transition-opacity duration-300">
-        <!-- Modal Content -->
-        <div class="bg-white rounded-xl shadow-2xl max-w-4xl mx-auto my-8 p-6 md:p-8 modal-content">
-            <div class="flex justify-between items-center border-b pb-4 mb-6">
-                <h2 class="text-2xl font-bold text-purple-600">Cat Profile Manager</h2>
-                <!-- Close button now clears the URL hash -->
-                <button onclick="window.location.hash='';" class="text-gray-400 hover:text-pink-500 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-
-            <!-- Add/Edit Cat Form -->
-            <div class="bg-gray-50 p-6 rounded-xl shadow-inner mb-8">
-                <h3 id="form-title" class="text-xl font-semibold text-gray-700 mb-3">Add New Cat Profile</h3>
-                <div id="form-message" class="hidden p-3 mb-4 rounded-lg text-sm font-medium"></div>
-                <form id="cat-form" class="space-y-4">
-                    <input type="text" id="cat-name" placeholder="Name (e.g., Whiskers)" required
-                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-                    
-                    <input type="text" id="cat-breed" placeholder="Breed (e.g., Siamese)" required
-                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-                    
-                    <textarea id="cat-description" placeholder="Personality/Description (e.g., Moody but lovable lap cat)" rows="2" required
-                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500"></textarea>
-
-                    <input type="text" id="cat-likes" placeholder="Likes (e.g., Sunbeams, Cuddles) - Comma separated" 
-                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-
-                    <div class="flex space-x-4">
-                        <button type="submit" id="save-profile-btn" class="w-full bg-pink-500 hover:bg-purple-600 text-white font-bold py-3 rounded-lg transition duration-300 shadow-lg">
-                            Save Profile
-                        </button>
-                        <button type="button" onclick="resetForm()" class="w-1/3 bg-white border border-gray-300 text-gray-700 font-bold py-3 rounded-lg transition hover:bg-gray-100">
-                            Reset Form
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Current Cat Profiles List -->
-            <h3 class="text-xl font-semibold text-gray-700 mb-3">Current Cat Profiles (<span id="cat-count">0</span>)</h3>
-            <div id="cat-list-container" class="space-y-4">
-                <!-- Cat profiles will be dynamically rendered here -->
-                <p class="text-center text-gray-500 py-6 border-dashed border-2 rounded-lg">Loading cats from database...</p>
-            </div>
-        </div>
-    </div>
 </body>
 </html>
