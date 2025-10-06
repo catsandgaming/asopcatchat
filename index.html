@@ -331,9 +331,9 @@
 
         function initializeFirebase() {
             let configToUse = firebaseConfig;
-            configMissing = Object.keys(firebaseConfig).length === 0;
+            const hasRealConfig = Object.keys(firebaseConfig).length > 0;
 
-            if (configMissing) {
+            if (!hasRealConfig) {
                 // Use a dummy config to prevent initializeApp from crashing 
                 configToUse = { 
                     apiKey: "DUMMY", 
@@ -343,8 +343,9 @@
                     messagingSenderId: "DUMMY", 
                     appId: "DUMMY" 
                 };
-                statusDisplay.textContent = "⚠️ WARNING: Using DUMMY Config. Database WRITE functionality is DISABLED.";
+                statusDisplay.textContent = "⚠️ WARNING: Using Placeholder Mode. Database WRITE is DISABLED.";
                 console.warn("Using dummy Firebase config. Database WRITE functionality is disabled.");
+                configMissing = true; 
                 loadPlaceholderCats();
                 startButton.disabled = false;
                 checkUrlHash(); 
@@ -357,7 +358,7 @@
                 setLogLevel('debug');
                 
                 const app = initializeApp(configToUse);
-                db = getFirestore(app);
+                db = getFirestore(app); // DB is set synchronously here.
                 auth = getAuth(app);
                 
                 const authPromise = initialAuthToken 
@@ -391,7 +392,7 @@
         
         // Fallback cat data for when config is missing
         function loadPlaceholderCats() {
-            // Using a simple index as a temporary ID for placeholder data
+            // This is the list of 10 cats the user sees when running offline.
             window.cats = [
                 { id: "ronnie-p", name: "Ronnie", breed: "Siamese", personality: "Vocal and demanding, often complaining about the service.", likes: ["Attention", "Warm spots"], dislikes: ["Loud noises"] },
                 { id: "jigsaw-p", name: "Jigsaw", breed: "Tabby", personality: "Adept at puzzles, often found staring intently at objects.", likes: ["Feather toys", "Quiet observation"], dislikes: ["Being rushed"] },
@@ -412,6 +413,7 @@
 
         function fetchCats() {
             if (configMissing) {
+                // If in placeholder mode, only re-render the list if the manager is open.
                 if (isManaging) renderCatList();
                 return;
             }
@@ -534,9 +536,9 @@
         window.deleteCat = async function(catId, catName) {
             // Check that the database object exists before proceeding
             if (!db) {
-                catFormStatus.textContent = "Error: Database is not initialized for writing. Configuration may be missing or failed to load.";
+                catFormStatus.textContent = "WRITE FAILED: The cat list you see is a hardcoded placeholder list. This means the Firebase database is offline or its configuration is missing from your environment. You must reload or run the app in the Canvas editor to enable data saving.";
                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
-                catFormStatus.classList.add('text-red-500');
+                catFormStatus.classList.add('text-red-500', 'font-bold');
                 return;
             }
 
@@ -603,9 +605,10 @@
 
             // CRITICAL: Check only for the database object state.
             if (!db) {
-                 catFormStatus.textContent = "Error: Database is not initialized for writing. Configuration may be missing or failed to load.";
+                 // --- UPDATED ERROR MESSAGE FOR OFFLINE MODE ---
+                 catFormStatus.textContent = "WRITE FAILED: The cat list you see is a hardcoded placeholder list. This means the Firebase database is offline or its configuration is missing from your environment. You must reload or run the app in the Canvas editor to enable data saving.";
                  catFormStatus.classList.remove('hidden', 'text-cat-owner');
-                 catFormStatus.classList.add('text-red-500');
+                 catFormStatus.classList.add('text-red-500', 'font-bold');
                  return;
             }
             
@@ -640,7 +643,7 @@
                 
                 // Display success message 
                 catFormStatus.innerHTML = successMessage;
-                catFormStatus.classList.remove('hidden', 'text-red-500');
+                catFormStatus.classList.remove('hidden', 'text-red-500', 'font-bold');
                 catFormStatus.classList.add('text-cat-owner'); 
                 
                 resetCatForm();
@@ -652,7 +655,7 @@
                 console.error(`Error saving cat data:`, error);
                 // CRITICAL: Display the specific error message from the Firestore API
                 catFormStatus.textContent = `Failed to save ${name}: ${error.message}.`;
-                catFormStatus.classList.remove('hidden', 'text-cat-owner');
+                catFormStatus.classList.remove('hidden', 'text-cat-owner', 'font-bold');
                 catFormStatus.classList.add('text-red-500');
             }
         }
