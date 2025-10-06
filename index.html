@@ -107,6 +107,7 @@
         #initial-prompt {
             background-color: var(--color-input-bg);
             color: var(--color-text-main);
+            border-color: var(--color-bubble-border);
         }
     </style>
 </head>
@@ -121,14 +122,14 @@
             </h1>
             
             <!-- Theme Toggle Button -->
-            <button id="theme-toggle" onclick="toggleTheme()" class="p-2 rounded-full text-white hover:bg-cat-pink/50 transition">
+            <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" class="p-2 rounded-full text-white hover:bg-cat-pink/50 transition">
                 <!-- Sun Icon (Light Mode) -->
                 <svg id="sun-icon" class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16.5 12a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
                 </svg>
                 <!-- Moon Icon (Dark Mode) - Hidden by default, shown via JS/CSS -->
                 <svg id="moon-icon" class="h-6 w-6 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a.75.75 0 01-.75.75h-15a.75.75 0 01-.75-.75V6.75A.75.75 0 016 6h15a.75.75 0 01.75.75zM12 9.75a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 2.25v1.5a.75.75 0 01-1.5 0V2.25a.75.75 0 011.5 0zM12 21.75a.75.75 0 01-.75-.75h1.5a.75.75 0 01-.75.75zM4.5 9.75a.75.75 0 01-.75-.75h1.5a.75.75 0 01-.75.75zM19.5 9.75a.75.75 0 01-.75-.75h1.5a.75.75 0 01-.75.75zM6 12a6 6 0 1112 0 6 6 0 01-12 0z" />
                 </svg>
             </button>
         </div>
@@ -162,7 +163,7 @@
                 type="text" 
                 id="initial-prompt" 
                 placeholder="Enter the initial scene/topic here (e.g., A customer just ordered a tuna sandwich)."
-                class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cat-purple text-cat-text">
+                class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cat-purple">
             
             <button id="start-button" onclick="startChat()"
                     class="w-full bg-cat-purple hover:bg-cat-pink text-white font-semibold py-3 px-5 rounded-lg transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-lg">
@@ -176,7 +177,9 @@
     <script type="module">
 
         // --- Configuration ---
-        const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=AIzaSyDwvUCqT7mScNFjb4qR0avyracZcti_ZaQ";
+        // NOTE: The API Key is intentionally left as an empty string to be provided by the execution environment.
+        const API_KEY = ""; 
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${API_KEY}`;
         const AUTO_INTERVAL_MS = 3000; // 3 seconds between turns
 
         
@@ -305,13 +308,15 @@
 
         function initializeTheme() {
             const savedTheme = localStorage.getItem('theme');
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            // Check if the user prefers dark mode (only if no theme is saved)
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches; 
 
             if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
                 body.classList.add('dark');
                 sunIcon.classList.add('hidden');
                 moonIcon.classList.remove('hidden');
             } else {
+                // Default to light mode
                 body.classList.remove('dark');
                 sunIcon.classList.remove('hidden');
                 moonIcon.classList.add('hidden');
@@ -354,7 +359,8 @@
             const messageBubble = document.createElement('div');
             const isError = text.includes("The simulation hit a wall") || text.includes("Error:");
             
-            messageBubble.className = `max-w-4xl chat-bubble mt-2 text-cat-text border shadow-md whitespace-pre-wrap ${isError ? 'bg-red-100 border-red-400' : ''}`;
+            // Adjust class list dynamically for dark/light mode
+            messageBubble.className = `max-w-4xl chat-bubble mt-2 shadow-md whitespace-pre-wrap ${isError ? 'bg-red-100 dark:bg-red-900 border-red-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`;
             
             // Highlight speaker names (Owner is the only one in the 'owner-name' class)
             const charNames = characters.map(c => c.name).join('|');
@@ -383,6 +389,7 @@
                     if (response.status !== 429) throw new Error(`API returned status ${response.status}: ${response.statusText || await response.text()}`);
                 } catch (error) {
                     if (i === maxRetries - 1) throw error;
+                    // Do not log retries as errors
                 }
                 // Exponential backoff
                 await new Promise(resolve => setTimeout(resolve, (2 ** i) * 1000));
@@ -421,7 +428,7 @@
                 chatStarted = true;
 
                 // Render the topic message
-                renderMessage(`**SIMULATION START** - Topic: ${topic}\n\nStrict sequential turn order established.`);
+                renderMessage(`Topic: ${topic}\n\nStrict sequential turn order established.`);
             }
 
             // Change button text and function
@@ -448,7 +455,7 @@
             
             isSending = true;
             startButton.disabled = true;
-            loadingSpinner.classList.remove('hidden');
+            // loadingSpinner.classList.remove('hidden'); // Only show loading for the first turn to avoid flicker
 
             // --- LOGIC FOR DETERMINING NEXT SPEAKER ---
             const totalCharacters = characters.length;
