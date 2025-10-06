@@ -536,8 +536,11 @@
         }
 
         window.deleteCat = async function(catId, catName) {
-            if (!authReady || configMissing || !db) {
-                console.error("Cannot delete: Database not connected or user not authenticated.");
+            // Removed authReady check to rely on try/catch
+            if (configMissing || !db) {
+                catFormStatus.textContent = "Error: Database is not available for writing.";
+                catFormStatus.classList.remove('hidden', 'text-cat-owner');
+                catFormStatus.classList.add('text-red-500');
                 return;
             }
 
@@ -553,7 +556,7 @@
                 console.log(`Cat ${catName} deleted successfully.`);
             } catch (error) {
                 console.error(`Error deleting cat ${catName}:`, error);
-                // Display error message
+                // Display specific Firestore error message
                 catFormStatus.textContent = `Failed to delete ${catName}: ${error.message}.`;
                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
                 catFormStatus.classList.add('text-red-500');
@@ -602,14 +605,15 @@
             event.preventDefault();
             catFormStatus.classList.add('hidden'); // Hide any previous status
 
-            // Basic check for initialization variables. If the list is showing, this should pass.
-            if (configMissing || !db || !auth) {
+            // New check is minimal, relying on the try/catch for detailed error reporting
+            if (configMissing || !db) {
                 console.error("Operation failed: Database not connected or configuration is missing.");
-                catFormStatus.textContent = "Error: Database config or connection failed.";
+                catFormStatus.textContent = "Error: Database is not available for writing.";
                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
                 catFormStatus.classList.add('text-red-500');
                 return;
             }
+            
             // Use crypto.randomUUID() for new documents, or the existing ID for updates
             const id = document.getElementById('cat-id-input').value.trim() || crypto.randomUUID();
             const name = document.getElementById('cat-name-input').value.trim();
@@ -632,14 +636,15 @@
             const isEditing = !!document.getElementById('cat-id-input').value.trim();
 
             try {
-                // Let setDoc fail if permissions are not right. Firestore will return a proper error.
+                // setDoc handles both creation and updating based on the ID. 
+                // Any failure here (like PERMISSION_DENIED) will be caught and reported below.
                 const catDocRef = doc(db, `artifacts/${appId}/public/data/cats`, id);
                 await setDoc(catDocRef, catData); 
 
                 const successMessage = `${isEditing ? 'Updated' : 'Added'} **${name}** successfully!`;
                 console.log(successMessage.replace(/\*\*/g, ''));
                 
-                // Display success message (and the onSnapshot listener handles refreshing the list)
+                // Display success message 
                 catFormStatus.innerHTML = successMessage;
                 catFormStatus.classList.remove('hidden', 'text-red-500');
                 catFormStatus.classList.add('text-cat-owner'); 
@@ -651,7 +656,7 @@
 
             } catch (error) {
                 console.error(`Error saving cat data:`, error);
-                // Display the specific error message from the Firestore API
+                // CRITICAL: Display the specific error message from the Firestore API
                 catFormStatus.textContent = `Failed to save ${name}: ${error.message}.`;
                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
                 catFormStatus.classList.add('text-red-500');
