@@ -20,7 +20,8 @@
                         'cat-owner': '#34D399', // Emerald for the Owner
                         'cat-background': '#f7f7f7',
                         'cat-text': '#1f2937',
-                        'cat-cream': '#fef3c7'
+                        'cat-cream': '#fef3c7',
+                        'cat-red': '#EF4444'
                     }
                 }
             }
@@ -61,15 +62,48 @@
             border-top: 1px solid #e5e7eb;
             box-shadow: 0 -4px 6px -1px rgb(0 0 0 / 0.1);
         }
+        /* Modal Overlay Styling */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background-color: white;
+            border-radius: 1rem;
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            padding: 2rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
     </style>
 </head>
 <body class="flex flex-col min-h-screen">
 
     <!-- Header -->
     <header class="bg-cat-purple shadow-xl p-4 md:p-6 sticky top-0 z-10">
-        <h1 class="text-3xl font-extrabold text-white text-center flex items-center justify-center">
-            <span class="inline-block mr-2 text-4xl">🐈</span> A Slice Of Purrfection Cat Chat!
-        </h1>
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-3xl font-extrabold text-white flex items-center">
+                <span class="inline-block mr-2 text-4xl">🐈</span> Cat Chat!
+            </h1>
+            <button id="manage-cats-btn" onclick="openCatManager()" disabled
+                    class="bg-cat-pink hover:bg-cat-red text-white font-semibold py-2 px-4 rounded-lg transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-md">
+                Manage Cats
+            </button>
+        </div>
         <p class="text-sm text-cat-cream text-center mt-1">Enter a topic, and click 'Next Turn' to watch the conversation unfold!</p>
         <p id="status-display" class="text-xs text-cat-cream text-center mt-1 font-mono">Loading...</p>
     </header>
@@ -111,13 +145,48 @@
         </div>
     </div>
 
+    <!-- Cat Management Modal (Hidden by default) -->
+    <div id="cat-manager-modal" class="modal-overlay hidden">
+        <div class="modal-content w-full md:w-3/4 lg:w-1/2">
+            <h2 class="text-3xl font-bold text-cat-purple mb-6 border-b pb-2">Cat Roster Management</h2>
+            
+            <!-- Add New Cat Form -->
+            <form id="add-cat-form" class="bg-cat-cream p-4 rounded-lg shadow-inner mb-6 space-y-3">
+                <h3 class="text-xl font-semibold text-cat-text">Add New Cat Profile</h3>
+                <input type="text" id="cat-name" placeholder="Name (e.g., whiskers)" required
+                       class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple" maxlength="15">
+                <input type="text" id="cat-breed" placeholder="Breed (e.g., Maine Coon)" required
+                       class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple">
+                <textarea id="cat-personality" placeholder="Personality (e.g., Demanding and hates dogs.)" rows="2" required
+                          class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple"></textarea>
+                <input type="text" id="cat-likes" placeholder="Likes (comma-separated, e.g., Salmon, Warm spots)"
+                       class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple">
+                <button type="submit" class="w-full bg-cat-purple hover:bg-cat-pink text-white font-semibold py-2 rounded-lg transition duration-300 shadow-md">
+                    Add Cat to Roster
+                </button>
+            </form>
+
+            <!-- Current Cat List -->
+            <h3 class="text-xl font-semibold text-cat-text mt-8 mb-4">Current Roster</h3>
+            <div id="cat-list" class="space-y-3">
+                <!-- Cat items will be rendered here -->
+                <p id="cat-list-loading" class="text-gray-500 text-center">Loading current cat profiles...</p>
+            </div>
+            
+            <!-- Close Button -->
+            <button onclick="closeCatManager()"
+                    class="mt-6 w-full bg-gray-300 hover:bg-gray-400 text-cat-text font-semibold py-2 rounded-lg transition duration-300">
+                Close
+            </button>
+        </div>
+    </div>
+
     <!-- Firebase & Gemini API Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // FIX: Import onAuthStateChanged to properly wait for authentication before fetching data
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // FIX: Import setLogLevel to enable Firebase debugging
-        import { getFirestore, collection, query, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // FIX: Added addDoc, deleteDoc, doc for Cat Management
+        import { getFirestore, collection, query, onSnapshot, setLogLevel, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Environment Globals ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -135,8 +204,12 @@
         let isSending = false;
         let chatStarted = false;
 
+        // Firestore Collection Path
+        const CAT_COLLECTION_PATH = (appId) => `artifacts/${appId}/public/data/cats`;
+
         // Character List (The Owner is defined here)
         const OWNER_PROFILE = {
+            id: 'owner',
             name: "Owner",
             breed: "Human",
             personality: "Caring, busy, slightly exasperated, focused on cafe operations and keeping the cats happy (and off the tables).",
@@ -152,6 +225,12 @@
         const loadingSpinner = document.getElementById('loading-spinner');
         const initialMessage = document.getElementById('initial-message');
         
+        // Cat Manager DOM elements
+        const manageCatsBtn = document.getElementById('manage-cats-btn');
+        const catManagerModal = document.getElementById('cat-manager-modal');
+        const addCatForm = document.getElementById('add-cat-form');
+        const catListElement = document.getElementById('cat-list');
+
         const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
         // --- Utility Functions ---
@@ -170,9 +249,11 @@
             instruction += "4. Do NOT include any introductory or concluding text (e.g., 'Next turn...', 'The conversation continues...'). Just output the raw dialogue.\n";
             instruction += "--- CHARACTER PROFILES ---\n";
 
+            // Filter out the Owner when building the list if we only want cats, but here we want all characters
             characters.forEach(char => {
-                const likes = char.likes.join(", ");
-                const dislikes = char.dislikes.length > 0 ? ` (Dislikes: ${char.dislikes.join(", ")})` : '';
+                // Ensure array properties exist before joining
+                const likes = Array.isArray(char.likes) ? char.likes.join(", ") : char.likes || "None";
+                const dislikes = Array.isArray(char.dislikes) && char.dislikes.length > 0 ? ` (Dislikes: ${char.dislikes.join(", ")})` : '';
                 instruction += `- ${char.name} (${char.breed}): ${char.personality}. Loves: ${likes}.${dislikes}\n`;
             });
             
@@ -193,8 +274,8 @@
             messageWrapper.className = 'flex justify-start w-full';
             
             const messageBubble = document.createElement('div');
-            // Check for the specific "napping" message to apply error styling
-            const isError = text.includes("The simulation hit a wall");
+            // Check for the specific "napping" message or "Error:" to apply error styling
+            const isError = text.includes("The simulation hit a wall") || text.includes("Error:");
             
             messageBubble.className = `max-w-4xl chat-bubble mt-2 text-cat-text border shadow-md whitespace-pre-wrap ${isError ? 'bg-red-100 border-red-400' : 'bg-white border-gray-200'}`;
             messageBubble.innerHTML = formatDialogue(text);
@@ -225,45 +306,190 @@
             for (let i = 0; i < maxRetries; i++) {
                 try {
                     const response = await fetch(url, options);
-                    if (response.status !== 429) { 
+                    
+                    if (response.ok) {
                         return response;
+                    }
+                    
+                    // If response is not OK, but not 429, we should stop and throw
+                    if (response.status !== 429) { 
+                        // Throw specific error that includes the status and response body
+                        throw new Error(`API returned status ${response.status}: ${response.statusText || await response.text()}`);
                     }
                     console.warn(`Rate limit hit (429). Retrying in ${2 ** i} seconds...`);
                 } catch (error) {
+                    // Re-throw if it's a specific status error we intentionally threw
+                    if (error.message.startsWith("API returned status")) {
+                         throw error;
+                    }
                     console.error("Fetch error during attempt", i + 1, error);
                 }
                 await new Promise(resolve => setTimeout(resolve, (2 ** i) * 1000));
             }
-            throw new Error("API call failed after multiple retries.");
+            throw new Error("API call failed after multiple retries due to persistent network errors or rate limiting.");
+        }
+
+        // --- Cat Management Logic ---
+
+        window.openCatManager = function() {
+            catManagerModal.classList.remove('hidden');
+        }
+
+        window.closeCatManager = function() {
+            catManagerModal.classList.add('hidden');
+        }
+
+        /**
+         * Renders the list of current cats in the management modal.
+         */
+        function renderCatList() {
+            catListElement.innerHTML = '';
+            
+            // Render Owner profile first (since it cannot be deleted)
+            catListElement.innerHTML += `
+                <div class="flex justify-between items-center p-3 bg-gray-100 rounded-lg border-l-4 border-cat-owner">
+                    <div class="flex-grow">
+                        <p class="font-bold text-cat-owner">Owner (Human)</p>
+                        <p class="text-xs text-gray-600 truncate">${OWNER_PROFILE.personality}</p>
+                    </div>
+                    <span class="text-xs text-gray-500 italic ml-4">System Profile</span>
+                </div>
+            `;
+
+            if (cats.length === 0) {
+                catListElement.innerHTML += '<p class="text-gray-500 text-center py-4">No custom cat profiles added yet. Start adding some!</p>';
+                return;
+            }
+
+            cats.forEach(cat => {
+                const catElement = document.createElement('div');
+                catElement.className = 'flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm';
+                catElement.innerHTML = `
+                    <div class="flex-grow mr-4">
+                        <p class="font-bold text-cat-purple">${cat.name} <span class="text-sm font-normal text-gray-500">(${cat.breed})</span></p>
+                        <p class="text-xs text-gray-600 truncate">${cat.personality}</p>
+                    </div>
+                    <button data-cat-id="${cat.id}" 
+                            class="delete-cat-btn bg-cat-red hover:bg-red-700 text-white text-xs font-semibold py-1 px-3 rounded-full transition duration-150">
+                        Delete
+                    </button>
+                `;
+                catListElement.appendChild(catElement);
+            });
+
+            // Attach delete listeners
+            document.querySelectorAll('.delete-cat-btn').forEach(button => {
+                button.onclick = (e) => {
+                    const id = e.target.getAttribute('data-cat-id');
+                    if (id) {
+                        deleteCatProfile(id);
+                    }
+                };
+            });
+        }
+
+        /**
+         * Adds a new cat profile to Firestore.
+         */
+        async function addCatProfile(e) {
+            e.preventDefault();
+            if (!db) {
+                alert("Database is not initialized. Cannot save cat."); // Use alert temporarily here as modal is active
+                return;
+            }
+
+            const name = document.getElementById('cat-name').value.trim();
+            const breed = document.getElementById('cat-breed').value.trim();
+            const personality = document.getElementById('cat-personality').value.trim();
+            const likesStr = document.getElementById('cat-likes').value.trim();
+            
+            // Simple validation
+            if (!name || !breed || !personality) {
+                alert("Please fill in Name, Breed, and Personality.");
+                return;
+            }
+
+            const newCat = {
+                name: name,
+                breed: breed,
+                personality: personality,
+                // Convert comma-separated string of likes into an array
+                likes: likesStr.split(',').map(s => s.trim()).filter(s => s.length > 0),
+                dislikes: [] // Start with an empty dislikes array
+            };
+
+            const collectionRef = collection(db, CAT_COLLECTION_PATH(appId));
+            
+            try {
+                // Add the document to Firestore
+                await addDoc(collectionRef, newCat);
+                addCatForm.reset(); // Clear form on success
+                // Status update is handled automatically by the onSnapshot listener
+                console.log("Cat profile successfully added:", name);
+            } catch (error) {
+                console.error("Error adding cat profile:", error);
+                alert(`Error adding cat profile: ${error.message}`);
+            }
+        }
+
+        /**
+         * Deletes a cat profile from Firestore using its document ID.
+         */
+        async function deleteCatProfile(id) {
+            if (!db) {
+                alert("Database is not initialized. Cannot delete cat."); // Use alert temporarily here as modal is active
+                return;
+            }
+            
+            const docRef = doc(db, CAT_COLLECTION_PATH(appId), id);
+            
+            try {
+                // Use custom confirmation instead of window.confirm
+                const isConfirmed = window.confirm(`Are you sure you want to delete the cat with ID: ${id}?`);
+                if (isConfirmed) {
+                    await deleteDoc(docRef);
+                    // Status update is handled automatically by the onSnapshot listener
+                    console.log("Cat profile successfully deleted:", id);
+                }
+            } catch (error) {
+                console.error("Error deleting cat profile:", error);
+                alert(`Error deleting cat profile: ${error.message}`);
+            }
         }
 
 
         // --- Firebase Initialization and Data Fetching ---
 
         function initializeFirebase() {
+            // Attach form listener regardless of Firebase status for mock data fallback testing
+            addCatForm.addEventListener('submit', addCatProfile);
+
             if (Object.keys(firebaseConfig).length === 0) {
                 // FALLBACK MOCK DATA MODE
                 statusDisplay.textContent = "Database Disabled. Loaded 10 Mock Profiles. Chat Ready. To enable persistence, ensure the Firebase Config is provided.";
                 
                 // Mock Cat Data (for development when no Firebase config is present)
                 const mockCats = [
-                    { name: "Ronnie", breed: "Siamese", personality: "Vain and overly dramatic, highly critical of new objects.", likes: ["Silence", "Cashmere"], dislikes: ["Loud noises", "Cheap plastic"] },
-                    { name: "Noodle", breed: "Calico", personality: "Always hungry and very clumsy. Will trip over air.", likes: ["Food", "Bags"], dislikes: ["Lids", "Empty bowls"] },
-                    { name: "Shadow", breed: "Black Shorthair", personality: "Mysterious and aloof. Only speaks in riddles or existential dread.", likes: ["Dark corners", "Existential dread"], dislikes: ["Joy", "Bright lights"] },
-                    { name: "Patches", breed: "Ragdoll", personality: "The alpha cat, but secretly loves belly rubs.", likes: ["Dominance", "Salmon"], dislikes: ["Being ignored", "Dogs"] },
-                    { name: "Zippy", breed: "Abyssinian", personality: "Hyperactive and playful. Cannot sit still.", likes: ["Laser pointers", "Climbing"], dislikes: ["Naps", "Stillness"] },
-                    { name: "Mittens", breed: "Maine Coon", personality: "A gentle giant, very motherly and protective.", likes: ["Cuddles", "Warm laps"], dislikes: ["Fights", "Cold floors"] },
-                    { name: "Captain", breed: "Scottish Fold", personality: "Old, tired, and obsessed with finding a perfect nap spot.", likes: ["Warm spots", "Comfort"], dislikes: ["Youthful energy", "Change"] },
-                    { name: "Pixel", breed: "Bengal", personality: "Smart and mischievous, always plotting.", likes: ["Puzzles", "Knocking things over"], dislikes: ["Doors", "Rules"] },
-                    { name: "Fluffy", breed: "Persian", personality: "Posh and demanding. Requires constant grooming and adoration.", likes: ["Brushing", "Adoration"], dislikes: ["Dirt", "Commoners"] },
-                    { name: "Toulouse", breed: "Orange Tabby", personality: "Lovable goofball, usually confused but means well.", likes: ["Sunbeams", "Scratches"], dislikes: ["The vacuum", "Thinking"] }
+                    { id: 'mock1', name: "Ronnie", breed: "Siamese", personality: "Vain and overly dramatic, highly critical of new objects.", likes: ["Silence", "Cashmere"], dislikes: ["Loud noises", "Cheap plastic"] },
+                    { id: 'mock2', name: "Noodle", breed: "Calico", personality: "Always hungry and very clumsy. Will trip over air.", likes: ["Food", "Bags"], dislikes: ["Lids", "Empty bowls"] },
+                    { id: 'mock3', name: "Shadow", breed: "Black Shorthair", personality: "Mysterious and aloof. Only speaks in riddles or existential dread.", likes: ["Dark corners", "Existential dread"], dislikes: ["Joy", "Bright lights"] },
+                    { id: 'mock4', name: "Patches", breed: "Ragdoll", personality: "The alpha cat, but secretly loves belly rubs.", likes: ["Dominance", "Salmon"], dislikes: ["Being ignored", "Dogs"] },
+                    { id: 'mock5', name: "Zippy", breed: "Abyssinian", personality: "Hyperactive and playful. Cannot sit still.", likes: ["Laser pointers", "Climbing"], dislikes: ["Naps", "Stillness"] },
+                    { id: 'mock6', name: "Mittens", breed: "Maine Coon", personality: "A gentle giant, very motherly and protective.", likes: ["Cuddles", "Warm laps"], dislikes: ["Fights", "Cold floors"] },
+                    { id: 'mock7', name: "Captain", breed: "Scottish Fold", personality: "Old, tired, and obsessed with finding a perfect nap spot.", likes: ["Warm spots", "Comfort"], dislikes: ["Youthful energy", "Change"] },
+                    { id: 'mock8', name: "Pixel", breed: "Bengal", personality: "Smart and mischievous, always plotting.", likes: ["Puzzles", "Knocking things over"], dislikes: ["Doors", "Rules"] },
+                    { id: 'mock9', name: "Fluffy", breed: "Persian", personality: "Posh and demanding. Requires constant grooming and adoration.", likes: ["Brushing", "Adoration"], dislikes: ["Dirt", "Commoners"] },
+                    { id: 'mock10', name: "Toulouse", breed: "Orange Tabby", personality: "Lovable goofball, usually confused but means well.", likes: ["Sunbeams", "Scratches"], dislikes: ["The vacuum", "Thinking"] }
                 ];
 
-                characters = [...mockCats, OWNER_PROFILE];
+                cats = mockCats; // Set global cats array
+                characters = [...cats, OWNER_PROFILE];
                 isReady = true;
                 startButton.disabled = false;
-                
-                // Attach event listeners immediately in fallback mode
+                manageCatsBtn.disabled = true; // Disable management since there's no persistence
+
+                renderCatList(); // Render the mock list
+
                 startButton.addEventListener('click', window.startChat);
                 window.generateNextTurn = window.generateNextTurn.bind(this);
                 return;
@@ -271,34 +497,30 @@
             
             // FIREBASE MODE
             try {
-                // FIX: Set debug log level for better visibility into Firestore operations
                 setLogLevel('debug');
                 
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
+                // Sign in with custom token or anonymously
                 if (initialAuthToken) {
                     signInWithCustomToken(auth, initialAuthToken).catch(e => console.error("Custom token auth failed:", e));
                 } else {
                     signInAnonymously(auth).catch(e => console.error("Anonymous auth failed:", e));
                 }
 
-                // FIX: Use onAuthStateChanged to ensure fetchCats is only called after a successful sign-in
-                // This resolves the "Missing or insufficient permissions" error because security rules 
-                // require an authenticated user (even anonymous) to read the public data path.
+                // Wait for user authentication state before fetching data
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
-                        // User is signed in, we can now safely fetch public data
                         console.log(`User signed in with UID: ${user.uid}. Fetching cat data.`);
-                        fetchCats();
+                        fetchCats(); // This will enable buttons on success
                     } else {
-                        // This handles the case if sign-in fails or hasn't completed yet
                         console.log("Waiting for user authentication state...");
                     }
                 });
 
-                startButton.addEventListener('click', window.startChat); // Attach listener once
+                startButton.addEventListener('click', window.startChat);
                 window.generateNextTurn = window.generateNextTurn.bind(this);
 
             } catch (error) {
@@ -308,14 +530,12 @@
         }
 
         function fetchCats() {
-            // Check if db and auth are initialized and a user is signed in
             if (!db || !auth.currentUser) {
-                 // This should technically not be hit if called from onAuthStateChanged, but acts as a safeguard
                  console.error("Attempted to fetch data before Firebase was ready or user signed in.");
                  return;
             }
 
-            const catCollectionPath = `artifacts/${appId}/public/data/cats`;
+            const catCollectionPath = CAT_COLLECTION_PATH(appId);
             const q = query(collection(db, catCollectionPath));
 
             onSnapshot(q, (querySnapshot) => {
@@ -323,26 +543,27 @@
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
                     if (data.name) {
-                        cats.push(data);
+                        // Store the document ID along with data
+                        cats.push({ id: doc.id, ...data });
                     }
                 });
 
+                // Update the characters list
                 characters = [...cats, OWNER_PROFILE];
-
-                if (cats.length >= 1) { // Changed from 10 to 1 for flexibility
-                    isReady = true;
-                    startButton.disabled = false;
-                    statusDisplay.textContent = `${cats.length} Cat Profiles + Owner Loaded. Ready to start!`;
-                } else {
-                    statusDisplay.textContent = `Loaded ${cats.length} cat profiles. Please ensure you have imported at least one cat profile.`;
-                    // Even if 0 cats are loaded, we are ready with the Owner profile, so we set isReady=true
-                    isReady = true;
-                    startButton.disabled = false;
-                }
+                
+                // Update the UI
+                renderCatList(); 
+                
+                isReady = true;
+                startButton.disabled = false;
+                manageCatsBtn.disabled = false;
+                
+                statusDisplay.textContent = `${cats.length} Custom Cat Profiles + Owner Loaded. Ready to start!`;
+                
             }, (error) => {
                 console.error("Error fetching cat data:", error);
-                // Display a user-friendly error message
-                statusDisplay.textContent = "Error loading cat data. Ensure Firestore rules are set up correctly for public read access.";
+                statusDisplay.textContent = "Error loading cat data. Ensure Firestore rules allow public read/write.";
+                manageCatsBtn.disabled = true; // Disable button if read fails
             });
         }
         
@@ -359,7 +580,6 @@
             if (!chatStarted) {
                 // Initialize for the first turn
                 chatHistory = [];
-                // Add initial scene setting as the first user part
                 chatHistory.push({ role: "user", parts: [{ text: "Initial Scene/Topic: " + topic }] });
                 chatStarted = true;
                 initialPromptInput.disabled = true;
@@ -379,7 +599,6 @@
         window.generateNextTurn = async function() {
             if (!isReady || isSending) return;
 
-            // Get the topic from the disabled input field
             const topic = initialPromptInput.value.trim();
             
             isSending = true;
@@ -388,11 +607,9 @@
 
             const systemPrompt = buildSystemInstruction(topic, chatHistory);
 
-            // FIX: Append a specific, action-oriented query to ensure the model responds.
             const actionQuery = "Generate the next turn of dialogue/action following the rules, ensuring at least one character reacts to the previous statement to keep the scene active.";
 
             const payload = {
-                // FIX: Send the history, then the new, forceful query.
                 contents: [
                     ...chatHistory,
                     { role: "user", parts: [{ text: actionQuery }] }
@@ -408,33 +625,32 @@
                 body: JSON.stringify(payload)
             };
 
-            // Call API and Handle Response
             try {
                 const response = await fetchWithRetry(GEMINI_API_URL, options);
                 
-                if (!response.ok) {
-                    throw new Error(`API returned status ${response.status}: ${response.statusText}`);
-                }
-
                 const result = await response.json();
                 const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
                 if (text && text.trim().length > 0) {
-                    // Display model message and update history
                     renderMessage(text);
                     chatHistory.push({ role: "model", parts: [{ text: text }] });
                 } else {
-                    // This error means the model returned an empty string, which is the 'napping' state
                     renderMessage("The simulation hit a wall. All characters are napping. Click 'Next Turn' to try waking them.");
                     console.error("API response missing text content. This often indicates the model couldn't find a logical next step:", result);
                 }
 
             } catch (error) {
                 console.error("Gemini API error:", error);
-                renderMessage(`Error: The network connection failed or the characters are too confused to talk. (${error.message})`);
+                
+                let errorMessage = `Error: The conversation stalled due to a network error. (${error.message})`;
+
+                if (error.message.includes("403")) {
+                    errorMessage = "Error: The request was **Forbidden (403)**. This indicates an issue with the **Gemini API Key** which is typically automatically provided by the environment.";
+                }
+
+                renderMessage(errorMessage);
 
             } finally {
-                // Cleanup
                 isSending = false;
                 startButton.disabled = false;
                 loadingSpinner.classList.add('hidden');
