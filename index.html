@@ -219,14 +219,15 @@
 
     <!-- JavaScript Logic (Firebase and App) -->
     <script type="module">
-        // --- Firebase Imports ---
+        // --- Firebase Imports (Only used if environment config is provided) ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Configuration ---
         const CORRECT_PASSWORD = "catmanager2025";
-        const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=";
+        // *** API Key is now directly included in the URL constant ***
+        const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=AIzaSyDwvUCqT7mScNFjb4qR0avyracZcti_ZaQ";
 
         // --- Global Firebase & State Variables ---
         let db = null; // Initialize to null; set only on successful init
@@ -235,7 +236,7 @@
         let characters = []; // Master list of characters for the AI
         let catRoster = []; // Just the cats from Firestore
         
-        // Default cats if Firestore fails (which it is currently doing)
+        // Default cats used when Firebase fails (as it is currently doing)
         const DEFAULT_CATS = [
             { name: "Mittens", breed: "Siamese", personality: "Vain and overly dramatic, believes she is royalty.", likes: "Cuddles, high perches", dislikes: "Getting wet, commoners" },
             { name: "Shadow", breed: "Black Cat", personality: "Quiet, observant, and slightly mischievous. Always plotting something.", likes: "Dark corners, string", dislikes: "Loud noises, being picked up" },
@@ -360,7 +361,7 @@
         }
 
 
-        // --- Simulation Logic (Unchanged) ---
+        // --- Simulation Logic ---
 
         let chatHistory = [];
         let isSending = false;
@@ -422,6 +423,7 @@
                 try {
                     const response = await fetch(url, options);
                     if (response.ok) return response;
+                    if (response.status === 403) throw new Error(`API returned status 403: Forbidden - Check API Key configuration.`);
                     if (response.status !== 429) throw new Error(`API returned status ${response.status}: ${response.statusText || await response.text()}`);
                 } catch (error) {
                     if (i === maxRetries - 1) throw error;
@@ -492,8 +494,8 @@
             };
 
             try {
-                const apiKey = "";
-                const response = await fetchWithRetry(`${GEMINI_API_URL}${apiKey}`, options);
+                // API Key is now included in the GEMINI_API_URL constant
+                const response = await fetchWithRetry(GEMINI_API_URL, options);
                 
                 const result = await response.json();
                 const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -511,7 +513,7 @@
                 
                 let errorMessage = `Error: The conversation stalled due to a network error. (${error.message})`;
                 if (error.message.includes("403")) {
-                    errorMessage = "Error: The conversation stalled due to a **Forbidden (403)** error. Check API Key configuration.";
+                    errorMessage = "Error: The conversation stalled due to a **Forbidden (403)** error. The provided API Key may be invalid or restricted.";
                 }
 
                 renderMessage(errorMessage);
