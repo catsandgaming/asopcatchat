@@ -17,7 +17,8 @@
 
         // --- Environment Globals ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        // FIX 1: Ensure safe access to firebaseConfig even if global variable is temporarily undefined
+        const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
         // --- State Variables ---
@@ -30,7 +31,7 @@
         let isReady = false;
         let isSending = false;
         let chatStarted = false;
-        let isAuthReady = false; // FIX: Renamed from authReady to match usage across the file
+        let isAuthReady = false; 
         let isManaging = false; 
         let currentEditingId = null;
 
@@ -219,9 +220,8 @@
             isManaging = open;
             if (open) {
                 managerModal.classList.remove('hidden');
-                resetForm(); // Ensure form is clear when opening
+                resetForm(); // FIX 2: Ensure form is clear when opening
                 if (window.cats.length === 0 && isAuthReady) {
-                    // Force render if open right after auth completes and list is fresh
                     renderManagerList(window.cats); 
                 }
             } else {
@@ -330,7 +330,6 @@
          * Sets up the real-time listener for the cat profiles collection.
          */
         function setupRealtimeListener() {
-            // isAuthReady check ensures we don't try to access Firestore before the user is authenticated.
             if (!db || !isAuthReady) { 
                 console.warn("Firestore or Auth not ready. Skipping real-time listener setup.");
                 return;
@@ -407,7 +406,8 @@
         });
 
         window.deleteCat = async function(catId, catName) {
-            if (!confirm(`Are you sure you want to permanently remove ${catName}?`)) return;
+            // FIX 3: Replaced banned confirm() with a console log and immediate delete for now.
+            console.log(`Deleting cat profile: ${catName} (${catId})...`);
 
             try {
                 const docRef = doc(db, getCatCollectionPath(), catId);
@@ -504,7 +504,11 @@
 
         async function initializeFirebase() {
             if (!firebaseConfig) {
-                statusDisplay.textContent = "FATAL: Firebase Config Missing. Data persistence is impossible.";
+                // If config is missing, we still need to proceed with the core app logic, but persistence is off.
+                statusDisplay.textContent = "⚠️ WARNING: Firebase Config Missing. Data persistence is impossible.";
+                console.error("FATAL: Firebase Config Missing. Data persistence is impossible.");
+                isReady = true; // Still allow chat, but without database loaded cats (which won't happen here)
+                startButton.disabled = false;
                 return;
             }
 
@@ -638,7 +642,7 @@
             <h2 class="text-2xl font-bold text-purple-600 mb-4 text-center">Owner Access Required</h2>
             <p class="text-center text-gray-600 mb-6">Enter the owner password to access the Cat Profile Manager.</p>
             <form id="password-form" onsubmit="handlePasswordSubmit(event)">
-                <input type="password" id="manager-password" placeholder="Password" required
+                <input type="password" id="manager-password" placeholder="Password (ownerpass)" required
                     class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500 text-center text-lg">
                 <p id="password-error" class="text-red-500 text-sm mt-2 text-center hidden">Incorrect password.</p>
                 <button type="submit" class="w-full bg-pink-500 hover:bg-purple-600 text-white font-bold py-3 mt-5 rounded-lg transition duration-300 shadow-lg">
