@@ -183,10 +183,9 @@
     <div id="cat-manager-modal" class="modal-overlay hidden">
         <div class="modal-content w-full md:w-3/4 lg:w-1/2">
             <h2 class="text-3xl font-bold text-cat-purple mb-6 border-b pb-2">Cat Roster Management</h2>
-            <div id="manager-status" class="text-sm text-cat-blue bg-cat-cream p-3 rounded-lg mb-4 hidden">
+            <div id="manager-status" class="text-sm p-3 rounded-lg mb-4 hidden">
                 <div id="manager-status-text" class="inline-flex items-center">
-                    <svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    Please wait... Updating roster in database.
+                    <!-- Status message injected here -->
                 </div>
             </div>
             
@@ -230,7 +229,7 @@
         const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=";
 
         // --- Global Firebase & State Variables ---
-        let db;
+        let db = null; // Initialize to null; set only on successful init
         let auth;
         let userId = 'loading';
         let characters = []; // Master list of characters for the AI
@@ -266,19 +265,29 @@
                 setLogLevel('error');
 
                 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-                if (!firebaseConfig || !firebaseConfig.apiKey) {
-                    throw new Error("Firebase configuration is missing or invalid.");
+                
+                let firebaseConfig;
+                try {
+                    // Attempt to parse the global config variable. If not defined or empty string, fallback to '{}'.
+                    firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' && __firebase_config ? __firebase_config : '{}');
+                } catch (e) {
+                    console.error("Error parsing __firebase_config:", e);
+                    throw new Error("Invalid Firebase JSON configuration. Check environment variable.");
                 }
 
+                if (!firebaseConfig || !firebaseConfig.apiKey) {
+                    throw new Error("Firebase configuration object is empty or missing API key.");
+                }
+                
                 const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
+                db = getFirestore(app); // Set global db variable on success
                 auth = getAuth(app);
                 
                 // Auth setup using custom token or anonymous sign-in
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
                 } else {
                     await signInAnonymously(auth);
                 }
@@ -296,7 +305,8 @@
                 });
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
-                statusDisplay.textContent = 'ERROR: Database failed to initialize.';
+                db = null; // Ensure db is null if initialization failed
+                statusDisplay.textContent = 'ERROR: Database failed to initialize. Roster is not live.';
             }
         }
         
@@ -304,6 +314,8 @@
          * Sets up a real-time listener for the public cat profiles collection.
          */
         function subscribeToCats(appId) {
+            if (!db) return; // Prevent crash if DB failed to initialize
+
             const publicCatCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_PATH);
 
             onSnapshot(publicCatCollectionRef, (snapshot) => {
@@ -322,7 +334,9 @@
                 }
 
                 // Update UI status
-                statusDisplay.textContent = `Live Roster: ${catRoster.length} characters loaded.`;
+                if (db) {
+                    statusDisplay.textContent = `Live Roster: ${catRoster.length} characters loaded.`;
+                }
                 
                 // If chat hasn't started, show the initial ready message
                 if (!chatStarted) {
@@ -521,9 +535,17 @@
         window.openCatManager = function() {
             renderCatList();
             catManagerModal.classList.remove('hidden');
+            // If the database is not connected, display the error immediately upon opening the modal
+            if (!db) {
+                setManagerStatus(`ERROR: Database connection failed during initialization. Roster management is disabled.`, true);
+                addCatBtn.disabled = true;
+            } else {
+                addCatBtn.disabled = false;
+            }
         }
 
         window.closeCatManager = function() {
+            managerStatus.classList.add('hidden'); // Hide status on close
             catManagerModal.classList.add('hidden');
         }
 
@@ -583,7 +605,13 @@
             const breed = document.getElementById('cat-breed').value.trim();
             const personality = document.getElementById('cat-personality').value.trim();
 
-            if (!name || !breed || !personality || !db) return;
+            if (!name || !breed || !personality) return;
+            
+            if (!db) { // Check for database connection before proceeding
+                setManagerStatus(`ERROR: Database is not connected. Cannot save cat profile.`, true);
+                addCatBtn.disabled = false;
+                return;
+            }
 
             addCatBtn.disabled = true;
             setManagerStatus(`<svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Please wait... Saving cat to roster.`);
@@ -593,7 +621,7 @@
                     name: name,
                     breed: breed,
                     personality: personality,
-                    likes: "Unknown", // Simplified for initial entry
+                    likes: "Unknown", 
                     dislikes: []
                 };
 
@@ -610,12 +638,14 @@
                 setManagerStatus(`ERROR: Could not save cat profile to database. Check console. (${error.message})`, true);
             } finally {
                 addCatBtn.disabled = false;
-                // Status message will auto-clear on next action/list update
             }
         }
         
         window.deleteCatProfileFromFirestore = async function(docId) {
-            if (!db || !docId) return;
+            if (!db || !docId) { // Check for database connection before proceeding
+                if (!db) setManagerStatus(`ERROR: Database is not connected. Cannot delete cat profile.`, true);
+                return;
+            }
 
             addCatBtn.disabled = true;
             setManagerStatus(`<svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Please wait... Deleting cat from roster.`);
