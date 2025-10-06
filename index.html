@@ -235,6 +235,13 @@
         let characters = []; // Master list of characters for the AI
         let catRoster = []; // Just the cats from Firestore
         
+        // Default cats if Firestore fails (which it is currently doing)
+        const DEFAULT_CATS = [
+            { name: "Mittens", breed: "Siamese", personality: "Vain and overly dramatic, believes she is royalty.", likes: "Cuddles, high perches", dislikes: "Getting wet, commoners" },
+            { name: "Shadow", breed: "Black Cat", personality: "Quiet, observant, and slightly mischievous. Always plotting something.", likes: "Dark corners, string", dislikes: "Loud noises, being picked up" },
+            { name: "Leo", breed: "Ginger Tabby", personality: "A lovable goofball. Always hungry and enthusiastic about everything.", likes: "Tuna, belly rubs", dislikes: "Empty food bowls" },
+        ];
+
         const OWNER_PROFILE = { name: "Owner", breed: "Human", personality: "Caring, busy, focused on cafe operations. They are sometimes worried about the cat's drama.", likes: ["Happy cats", "Coffee"], dislikes: ["Vet visits", "Knocked-over food displays"] };
         const COLLECTION_PATH = 'cat_profiles';
         
@@ -306,7 +313,9 @@
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
                 db = null; // Ensure db is null if initialization failed
-                statusDisplay.textContent = 'ERROR: Database failed to initialize. Roster is not live.';
+                // Set default cats for the chat simulation
+                characters = [...DEFAULT_CATS, OWNER_PROFILE];
+                statusDisplay.textContent = `ERROR: Database failed to initialize. Roster is static (${DEFAULT_CATS.length} cats).`;
             }
         }
         
@@ -335,7 +344,7 @@
 
                 // Update UI status
                 if (db) {
-                    statusDisplay.textContent = `Live Roster: ${catRoster.length} characters loaded.`;
+                    statusDisplay.textContent = `Live Roster: ${catRoster.length} cats loaded.`;
                 }
                 
                 // If chat hasn't started, show the initial ready message
@@ -344,7 +353,9 @@
                 }
             }, (error) => {
                 console.error("Firestore subscription error:", error);
-                statusDisplay.textContent = 'ERROR: Failed to load cat roster in real-time.';
+                // If live subscription fails, revert to default cats for chat to remain functional
+                characters = [...DEFAULT_CATS, OWNER_PROFILE];
+                statusDisplay.textContent = 'ERROR: Failed to load cat roster in real-time. Roster is static.';
             });
         }
 
@@ -448,9 +459,6 @@
         window.generateNextTurn = async function() {
             // Check if we have at least the owner and one cat to talk
             if (characters.length <= 1) {
-                // Note: The Owner is always present, so characters.length should be at least 1.
-                // If it's only 1, it means the Firestore subscription failed to load the default cats
-                // AND the user hasn't added any (which they can't due to the error).
                 renderMessage("SYSTEM: Cannot start simulation. Roster must contain at least one cat and the Owner. (Roster size: " + characters.length + ")");
                 return;
             }
@@ -582,12 +590,17 @@
                 </div>
             `;
 
-            if (catRoster.length === 0) {
+            const rosterToDisplay = db ? catRoster : DEFAULT_CATS;
+
+            if (rosterToDisplay.length === 0 && db) { // Only prompt to add if DB is connected
                 catListElement.innerHTML += '<p class="text-gray-500 text-center py-4">No cats on the roster yet. Add some!</p>';
                 return;
+            } else if (rosterToDisplay.length === 0 && !db) { // Display message if using defaults and no defaults are set (shouldn't happen)
+                 catListElement.innerHTML += '<p class="text-gray-500 text-center py-4">Using static default roster (0 cats). The Chat simulation will not work.</p>';
+                 return;
             }
 
-            catRoster.forEach((cat, index) => {
+            rosterToDisplay.forEach((cat, index) => {
                 const catElement = document.createElement('div');
                 catElement.className = 'flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm';
                 
@@ -681,8 +694,14 @@
         
         // --- Initialization on Load ---
         window.onload = () => {
+            // First, initialize Firebase (this will set 'db' to null on failure, and set 'characters' to DEFAULT_CATS)
             initializeFirebase();
             
+            // Set the initial character roster immediately if DB fails
+            if (!db) {
+                characters = [...DEFAULT_CATS, OWNER_PROFILE];
+            }
+
             // Attach form listener for saving
             addCatForm.addEventListener('submit', addCatProfileToFirestore);
             
