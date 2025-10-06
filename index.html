@@ -170,7 +170,7 @@
                     <span id="form-button-text">Add New Cat</span>
                 </button>
             </form>
-            <!-- NEW: Status Message for CRUD operations -->
+            <!-- Status Message for CRUD operations -->
             <p id="cat-form-status" class="text-center font-semibold mb-4 hidden"></p>
 
             <!-- Current Cat Profiles List -->
@@ -235,7 +235,7 @@
         const catCountSpan = document.getElementById('cat-count');
         const formButtonText = document.getElementById('form-button-text');
         const noCatsMessage = document.getElementById('no-cats-message');
-        const catFormStatus = document.getElementById('cat-form-status'); // New status element
+        const catFormStatus = document.getElementById('cat-form-status'); 
         
         // Password Modal DOM Elements
         const passwordModal = document.getElementById('password-modal');
@@ -416,7 +416,6 @@
 
         function fetchCats() {
             if (configMissing) {
-                // In case placeholder data is used, ensure we call renderCatList if the manager is active
                 if (isManaging) renderCatList();
                 return;
             }
@@ -554,6 +553,10 @@
                 console.log(`Cat ${catName} deleted successfully.`);
             } catch (error) {
                 console.error(`Error deleting cat ${catName}:`, error);
+                // Display error message
+                catFormStatus.textContent = `Failed to delete ${catName}: ${error.message}.`;
+                catFormStatus.classList.remove('hidden', 'text-cat-owner');
+                catFormStatus.classList.add('text-red-500');
             }
         }
 
@@ -599,14 +602,14 @@
             event.preventDefault();
             catFormStatus.classList.add('hidden'); // Hide any previous status
 
-            if (!authReady || configMissing || !db) {
-                console.error("Operation failed: Database not connected or user not authenticated.");
-                catFormStatus.textContent = "Error: Database is not ready. Check initialization status.";
+            // Basic check for initialization variables. If the list is showing, this should pass.
+            if (configMissing || !db || !auth) {
+                console.error("Operation failed: Database not connected or configuration is missing.");
+                catFormStatus.textContent = "Error: Database config or connection failed.";
                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
                 catFormStatus.classList.add('text-red-500');
                 return;
             }
-
             // Use crypto.randomUUID() for new documents, or the existing ID for updates
             const id = document.getElementById('cat-id-input').value.trim() || crypto.randomUUID();
             const name = document.getElementById('cat-name-input').value.trim();
@@ -629,27 +632,27 @@
             const isEditing = !!document.getElementById('cat-id-input').value.trim();
 
             try {
+                // Let setDoc fail if permissions are not right. Firestore will return a proper error.
                 const catDocRef = doc(db, `artifacts/${appId}/public/data/cats`, id);
-                await setDoc(catDocRef, catData); // setDoc handles both creation and updating based on the ID
+                await setDoc(catDocRef, catData); 
 
                 const successMessage = `${isEditing ? 'Updated' : 'Added'} **${name}** successfully!`;
                 console.log(successMessage.replace(/\*\*/g, ''));
                 
-                // Display success message
+                // Display success message (and the onSnapshot listener handles refreshing the list)
                 catFormStatus.innerHTML = successMessage;
                 catFormStatus.classList.remove('hidden', 'text-red-500');
-                catFormStatus.classList.add('text-cat-owner'); // Green for success
+                catFormStatus.classList.add('text-cat-owner'); 
                 
                 resetCatForm();
-                // The onSnapshot listener will fire and call renderCatList()
 
                 // Hide status message after 3 seconds
                 setTimeout(() => catFormStatus.classList.add('hidden'), 3000);
 
             } catch (error) {
                 console.error(`Error saving cat data:`, error);
-                // Display error message
-                catFormStatus.textContent = `Failed to save ${name}: ${error.message}. Check console for details.`;
+                // Display the specific error message from the Firestore API
+                catFormStatus.textContent = `Failed to save ${name}: ${error.message}.`;
                 catFormStatus.classList.remove('hidden', 'text-cat-owner');
                 catFormStatus.classList.add('text-red-500');
             }
