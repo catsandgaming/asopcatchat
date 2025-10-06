@@ -32,7 +32,6 @@
         import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, query, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        setLogLevel('debug');
 
         // --- Environment Globals ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -52,7 +51,7 @@
         let isAuthReady = false; 
         let isManaging = false; 
         let currentEditingId = null;
-        let firebaseEnabled = !!firebaseConfig; 
+        const firebaseEnabled = !!firebaseConfig; 
         
 
         // Character List (The Owner is defined here)
@@ -60,8 +59,8 @@
             name: "Owner",
             breed: "Human",
             personality: "Caring, busy, slightly exasperated, focused on cafe operations and keeping the cats happy (and off the tables).",
-            likes: ["Happy cats", "Coffee", "Quiet afternoons"],
-            dislikes: ["Vet visits", "Knocked-over food displays"]
+            likes: "Happy cats, Coffee, Quiet afternoons",
+            dislikes: "Vet visits, Knocked-over food displays"
         };
         
         // Initial placeholder data (used only to populate Firestore on first run or be used directly if Firebase is disabled)
@@ -81,7 +80,7 @@
         // Manager Password (Hardcoded for simplicity in this single-file app)
         const MANAGER_PASSWORD = "ownerpass";
         
-        // FIX: Re-inserting the key to resolve the 403 error.
+        // API Key is explicitly provided here.
         const GEMINI_API_KEY = "AIzaSyDwvUCqT7mScNFjb4qR0avyracZcti_ZaQ"; 
         const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
         
@@ -142,7 +141,6 @@
 
         /**
          * Renders a message bubble in the chat window.
-         * FIX: Removed the **SIMULATION START** boilerplate.
          */
         function renderMessage(text) {
             if (!text.trim()) return; 
@@ -151,12 +149,10 @@
             messageWrapper.className = 'flex justify-start w-full';
             
             const messageBubble = document.createElement('div');
-            // Using max-w-full to ensure it fits mobile screens better
             messageBubble.className = 'max-w-full md:max-w-4xl chat-bubble mt-2 bg-white text-cat-text border border-gray-200 shadow-md whitespace-pre-wrap';
             messageBubble.innerHTML = formatDialogue(text);
 
             chatWindow.appendChild(messageBubble);
-            // FIX: Added to ensure page doesn't refresh when all speak (which it shouldn't as it's a single page app)
             chatWindow.scrollTop = chatWindow.scrollHeight; 
         }
 
@@ -170,40 +166,37 @@
             
             return text.replace(dialogueRegex, (match, p1, name, dialogue) => {
                 const nameClass = name === 'Owner' ? 'owner-name' : 'cat-name';
-                // FIX: Ensure no leading or trailing spaces on the dialogue
                 return `${p1}<span class="${nameClass}">${name}:</span> ${dialogue.trim()}`;
             });
         }
         
         /**
          * Builds a detailed system instruction for the autonomous chat simulation.
-         * FIX: Updated instructions to enforce cleaner, personality-driven dialogue.
          */
         function buildSystemInstruction(topic) {
             let instruction = "You are the autonomous script generator for a Cat Cafe Simulation. The characters are " + window.cats.length + " cats and their Owner. ";
-            instruction += "Your task is to generate the **next turn of the conversation** among 2 to 4 of these characters based on the topic and the current dialogue history. ";
+            instruction += "Your task is to generate the **next turn of the conversation** based on the topic and the current dialogue history. ";
             
-            // FIX 1, 2, 4, 6: Enforcing clean, personality-driven dialogue without parentheticals or symbols.
-            instruction += "The conversation must be dynamic, realistic, and **strictly reflect each character's established personality, likes, and dislikes**. Maintain a natural, back-and-forth flow.\n\n";
+            // FIX (Point 3): Enforcing single speaker per turn for cleaner flow.
+            instruction += "The conversation must be dynamic, realistic, and **strictly reflect each character's established personality, likes, and dislikes**. \n\n";
             
             instruction += "--- RULES ---\n";
             instruction += "1. The current topic is: " + topic + "\n";
-            instruction += "2. Format the entire response as a single block of dialogue using the format 'CharacterName: [Dialogue]'. Use newline characters for multiple speakers in one turn.\n";
+            instruction += "2. Format the entire response as a single block of dialogue using the format 'CharacterName: [Dialogue]'. **CRITICAL: Only include ONE speaker's turn per API call.**\n";
             instruction += "3. **CRITICAL: DO NOT** include any parenthetical actions (e.g., (eyes wide), (sighs)), emojis, asterisks, quotes, or symbols in the dialogue. Keep it clean text.\n";
             instruction += "4. **CRITICAL: DO NOT** include any introductory or concluding text (e.g., 'Next turn...', 'The conversation continues...'). Just output the raw dialogue.\n";
             instruction += "--- CHARACTER PROFILES ---\n";
 
-            // FIX 7: All characters are found in the characters array.
             characters.forEach(char => {
-                const likes = Array.isArray(char.likes) ? char.likes.join(", ") : char.likes;
-                const dislikes = Array.isArray(char.dislikes) ? ` (Dislikes: ${char.dislikes.join(", ")})` : '';
+                const likes = char.likes || "None specified";
+                const dislikes = char.dislikes ? ` (Dislikes: ${char.dislikes})` : '';
                 instruction += `- ${char.name} (${char.breed}): ${char.description || char.personality}. Loves: ${likes}.${dislikes}\n`;
             });
             
             if (chatHistory.length === 0) {
-                instruction += "\nBegin the simulation by having the characters immediately reacting to the initial topic/scene, respecting their personalities.";
+                instruction += "\nBegin the simulation by having the characters immediately reacting to the initial topic/scene, respecting their personalities. Select the most relevant character to speak first.";
             } else {
-                instruction += "\nGenerate the next turn of dialogue by having the characters respond to the previous turn and move the discussion forward, aiming for a one-by-one speaker exchange if possible.";
+                instruction += "\nGenerate the single next turn of dialogue by having the characters respond to the previous turn and move the discussion forward. Only one character should speak.";
             }
 
             return instruction;
@@ -218,7 +211,7 @@
                 }
             } else {
                 hidePasswordPrompt();
-                toggleCatManager(false); // Close the manager if the hash is cleared
+                toggleCatManager(false); 
             }
         }
 
@@ -254,12 +247,11 @@
                 managerModal.classList.remove('hidden'); 
                 resetForm(); 
                 if (!firebaseEnabled) {
-                     renderManagerList(window.cats); // If no firebase, render the mock list
+                     renderManagerList(window.cats); 
                 }
-                // If firebase is enabled, the onSnapshot listener handles rendering
             } else {
                 managerModal.classList.add('hidden');
-                resetForm(); // Ensure reset form runs when closing to clear state
+                resetForm(); 
             }
         }
         
@@ -277,10 +269,8 @@
             nameInput.value = cat.name || '';
             breedInput.value = cat.breed || '';
             descInput.value = cat.description || '';
-            // FIX 8: Correctly set likes input value from object
-            likesInput.value = cat.likes || ''; 
+            likesInput.value = cat.likes || '';
 
-            // Scroll to the top of the modal to show the form
             managerModal.querySelector('.modal-content').scrollTop = 0; 
         }
 
@@ -353,8 +343,10 @@
                     ? cat.description.substring(0, 50).trim() + '...' 
                     : cat.description;
                 
-                // Disable CRUD buttons if Firebase is not enabled
+                // FIX (Point 1): Buttons clearly disabled when Firebase is not enabled
                 const crudDisabled = firebaseEnabled ? '' : 'disabled opacity-50 cursor-not-allowed';
+                const crudColor = firebaseEnabled ? 'text-cat-owner hover:text-green-700' : 'text-gray-400';
+                const deleteColor = firebaseEnabled ? 'text-red-500 hover:text-red-700' : 'text-gray-400';
 
                 card.innerHTML = `
                     <div>
@@ -363,8 +355,10 @@
                         <p class="text-xs text-gray-500 mt-1">Likes: ${cat.likes}</p>
                     </div>
                     <div class="flex space-x-2 mt-3 md:mt-0">
-                        <button onclick="window.loadCatForEdit('${catId}')" class="text-sm text-cat-owner hover:text-green-700 font-semibold transition ${crudDisabled}" ${crudDisabled}>Edit</button>
-                        <button onclick="window.deleteCat('${catId}', '${cat.name}')" class="text-sm text-red-500 hover:text-red-700 font-semibold transition ${crudDisabled}" ${crudDisabled}>Delete</button>
+                        <button onclick="${firebaseEnabled ? `window.loadCatForEdit('${catId}')` : `showMessage('Cannot edit mock profiles.', 'error')`}" 
+                                class="text-sm ${crudColor} font-semibold transition ${crudDisabled}" ${crudDisabled}>Edit</button>
+                        <button onclick="${firebaseEnabled ? `window.deleteCat('${catId}', '${cat.name}')` : `showMessage('Cannot delete mock profiles.', 'error')`}" 
+                                class="text-sm ${deleteColor} font-semibold transition ${crudDisabled}" ${crudDisabled}>Delete</button>
                     </div>
                 `;
                 catListContainer.appendChild(card);
@@ -396,7 +390,7 @@
                     startButton.disabled = false;
                     statusDisplay.textContent = `${window.cats.length} Cat Profiles + Owner Loaded. Chat Ready! (Persistent)`;
                 } else {
-                    statusDisplay.textContent = `Loading cat profiles (0 found). Please add one via the Manager.`;
+                    statusDisplay.textContent = `0 profiles found. Please add a cat via the Manager.`;
                     isReady = false; 
                     startButton.disabled = true;
                 }
@@ -434,7 +428,6 @@
                 return;
             }
 
-            // FIX 8: Ensuring data structure matches the profile requirements
             const catData = { name, breed, description, likes };
             const catCollectionRef = collection(db, getCatCollectionPath());
 
@@ -460,8 +453,6 @@
                 return;
             }
             
-            console.log(`Deleting cat profile: ${catName} (${catId})...`);
-
             try {
                 const docRef = doc(db, getCatCollectionPath(), catId);
                 await deleteDoc(docRef);
@@ -493,8 +484,8 @@
                 startButton.textContent = "Next Turn";
                 startButton.onclick = window.generateNextTurn;
 
-                // FIX 3: Only display the topic, removing **SIMULATION START**
-                renderMessage(`**Topic:** ${topic}`); 
+                // FIX (Point 4): Only display the topic, removing **SIMULATION START** and bold asterisks
+                renderMessage(`Topic: ${topic}`); 
             }
 
             window.generateNextTurn();
@@ -559,7 +550,6 @@
                 const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
                 if (text) {
-                    // FIX 5: Page does not refresh, content is added here.
                     renderMessage(text);
                     chatHistory.push({ role: "model", parts: [{ text: text }] });
                 } else {
@@ -585,8 +575,11 @@
                 window.cats = MOCK_CAT_DATA.map((cat, index) => ({ ...cat, id: `mock-${index}` }));
                 characters = [...window.cats, OWNER_PROFILE];
 
-                // FIX 9: Cleaner warning message when Firebase is missing
-                statusDisplay.textContent = `⚠️ Database Disabled. Loaded ${window.cats.length} Mock Profiles. Chat Ready.`;
+                // FIX (Point 5): Clear explanation for disabled database
+                statusDisplay.innerHTML = `
+                    <span class="font-bold text-yellow-300">⚠️ Database Disabled.</span> Loaded ${window.cats.length} Mock Profiles. Chat Ready. 
+                    <span class="text-white/70">To enable persistence, ensure the Firebase Config is provided.</span>
+                `;
                 isReady = true; 
                 startButton.disabled = false;
                 
@@ -594,6 +587,9 @@
                 checkUrlHash();
                 return; 
             }
+            
+            // FIX (Point 2): Only enable debug logging if Firebase is enabled
+            setLogLevel('debug');
 
             // If Firebase is enabled, proceed with full initialization
             try {
@@ -635,7 +631,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f7f7f7;
+            background-color: var(--tw-colors-cat-background);
             min-height: 100vh;
         }
         .chat-container-main {
