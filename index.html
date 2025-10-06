@@ -21,7 +21,8 @@
                         'cat-background': '#f7f7f7',
                         'cat-text': '#1f2937',
                         'cat-cream': '#fef3c7',
-                        'cat-red': '#EF4444'
+                        'cat-red': '#EF4444',
+                        'cat-blue': '#3B82F6' // Added for the edit button
                     }
                 }
             }
@@ -145,32 +146,47 @@
         </div>
     </div>
 
-    <!-- Cat Management Modal (Hidden by default) -->
+    <!-- Cat Management Modal (Primary) -->
     <div id="cat-manager-modal" class="modal-overlay hidden">
         <div class="modal-content w-full md:w-3/4 lg:w-1/2">
             <h2 class="text-3xl font-bold text-cat-purple mb-6 border-b pb-2">Cat Roster Management</h2>
             
-            <!-- Add New Cat Form -->
-            <form id="add-cat-form" class="bg-cat-cream p-4 rounded-lg shadow-inner mb-6 space-y-3">
-                <h3 class="text-xl font-semibold text-cat-text">Add New Cat Profile</h3>
-                <input type="text" id="cat-name" placeholder="Name (e.g., whiskers)" required
-                       class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple" maxlength="15">
-                <input type="text" id="cat-breed" placeholder="Breed (e.g., Maine Coon)" required
-                       class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple">
-                <textarea id="cat-personality" placeholder="Personality (e.g., Demanding and hates dogs.)" rows="2" required
-                          class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple"></textarea>
-                <input type="text" id="cat-likes" placeholder="Likes (comma-separated, e.g., Salmon, Warm spots)"
-                       class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple">
-                <button type="submit" class="w-full bg-cat-purple hover:bg-cat-pink text-white font-semibold py-2 rounded-lg transition duration-300 shadow-md">
-                    Add Cat to Roster
-                </button>
-            </form>
+            <!-- Authorization Message/Content Switch -->
+            <div id="auth-check">
+                <!-- Content will be swapped here based on auth state -->
+                <p id="auth-loading" class="text-center py-8 text-lg text-gray-500">Checking authorization...</p>
 
-            <!-- Current Cat List -->
-            <h3 class="text-xl font-semibold text-cat-text mt-8 mb-4">Current Roster</h3>
-            <div id="cat-list" class="space-y-3">
-                <!-- Cat items will be rendered here -->
-                <p id="cat-list-loading" class="text-gray-500 text-center">Loading current cat profiles...</p>
+                <!-- Unauthorized Message (Default for safety) -->
+                <div id="unauthorized-message" class="hidden text-center p-6 bg-red-100 border border-red-400 rounded-lg">
+                    <p class="font-bold text-red-700 mb-2">Unauthorized Access</p>
+                    <p class="text-red-600">You must be logged in to manage the cat roster. Please ensure your environment has completed authentication.</p>
+                </div>
+
+                <!-- Authorized Content -->
+                <div id="authorized-content" class="hidden">
+                    <!-- Add New Cat Form -->
+                    <form id="add-cat-form" class="bg-cat-cream p-4 rounded-lg shadow-inner mb-6 space-y-3">
+                        <h3 class="text-xl font-semibold text-cat-text">Add New Cat Profile</h3>
+                        <input type="text" id="cat-name" placeholder="Name (e.g., whiskers)" required
+                            class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple" maxlength="15">
+                        <input type="text" id="cat-breed" placeholder="Breed (e.g., Maine Coon)" required
+                            class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple">
+                        <textarea id="cat-personality" placeholder="Personality (e.g., Demanding and hates dogs.)" rows="2" required
+                                class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple"></textarea>
+                        <input type="text" id="cat-likes" placeholder="Likes (comma-separated, e.g., Salmon, Warm spots)"
+                            class="w-full p-2 border rounded-md focus:ring-cat-purple focus:border-cat-purple">
+                        <button type="submit" class="w-full bg-cat-purple hover:bg-cat-pink text-white font-semibold py-2 rounded-lg transition duration-300 shadow-md">
+                            Add Cat to Roster
+                        </button>
+                    </form>
+
+                    <!-- Current Cat List -->
+                    <h3 class="text-xl font-semibold text-cat-text mt-8 mb-4">Current Roster</h3>
+                    <div id="cat-list" class="space-y-3">
+                        <!-- Cat items will be rendered here -->
+                        <p id="cat-list-loading" class="text-gray-500 text-center">Loading current cat profiles...</p>
+                    </div>
+                </div>
             </div>
             
             <!-- Close Button -->
@@ -181,12 +197,38 @@
         </div>
     </div>
 
+    <!-- Cat Edit Modal (Secondary) -->
+    <div id="edit-cat-modal" class="modal-overlay hidden">
+        <div class="modal-content w-full md:w-3/4 lg:w-1/2">
+            <h2 class="text-3xl font-bold text-cat-blue mb-6 border-b pb-2">Edit Cat Profile</h2>
+            
+            <form id="edit-cat-form" class="bg-cat-cream p-4 rounded-lg shadow-inner mb-6 space-y-3">
+                <input type="hidden" id="edit-cat-id">
+                <input type="text" id="edit-cat-name" placeholder="Name" required
+                       class="w-full p-2 border rounded-md focus:ring-cat-blue focus:border-cat-blue" maxlength="15">
+                <input type="text" id="edit-cat-breed" placeholder="Breed" required
+                       class="w-full p-2 border rounded-md focus:ring-cat-blue focus:border-cat-blue">
+                <textarea id="edit-cat-personality" placeholder="Personality" rows="2" required
+                          class="w-full p-2 border rounded-md focus:ring-cat-blue focus:border-cat-blue"></textarea>
+                <input type="text" id="edit-cat-likes" placeholder="Likes (comma-separated)"
+                       class="w-full p-2 border rounded-md focus:ring-cat-blue focus:border-cat-blue">
+                <button type="submit" class="w-full bg-cat-blue hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition duration-300 shadow-md">
+                    Save Changes
+                </button>
+            </form>
+
+            <button onclick="closeEditCatModal()"
+                    class="mt-6 w-full bg-gray-300 hover:bg-gray-400 text-cat-text font-semibold py-2 rounded-lg transition duration-300">
+                Cancel
+            </button>
+        </div>
+    </div>
+
     <!-- Firebase & Gemini API Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // FIX: Added addDoc, deleteDoc, doc for Cat Management
-        import { getFirestore, collection, query, onSnapshot, setLogLevel, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, query, onSnapshot, setLogLevel, addDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Environment Globals ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -203,6 +245,7 @@
         let isReady = false;
         let isSending = false;
         let chatStarted = false;
+        let isAuthenticated = false; // New state for authorization check
 
         // Firestore Collection Path
         const CAT_COLLECTION_PATH = (appId) => `artifacts/${appId}/public/data/cats`;
@@ -228,8 +271,16 @@
         // Cat Manager DOM elements
         const manageCatsBtn = document.getElementById('manage-cats-btn');
         const catManagerModal = document.getElementById('cat-manager-modal');
+        const editCatModal = document.getElementById('edit-cat-modal'); // New Edit Modal
         const addCatForm = document.getElementById('add-cat-form');
+        const editCatForm = document.getElementById('edit-cat-form'); // New Edit Form
         const catListElement = document.getElementById('cat-list');
+        
+        // Auth check DOM elements
+        const authLoading = document.getElementById('auth-loading');
+        const unauthorizedMessage = document.getElementById('unauthorized-message');
+        const authorizedContent = document.getElementById('authorized-content');
+
 
         const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
@@ -329,15 +380,47 @@
             throw new Error("API call failed after multiple retries due to persistent network errors or rate limiting.");
         }
 
-        // --- Cat Management Logic ---
+        // --- Cat Management UI Functions ---
 
         window.openCatManager = function() {
             catManagerModal.classList.remove('hidden');
+            // Show appropriate content based on authentication state
+            authLoading.classList.add('hidden');
+            if (isAuthenticated) {
+                authorizedContent.classList.remove('hidden');
+                unauthorizedMessage.classList.add('hidden');
+            } else {
+                authorizedContent.classList.add('hidden');
+                unauthorizedMessage.classList.remove('hidden');
+            }
         }
 
         window.closeCatManager = function() {
             catManagerModal.classList.add('hidden');
         }
+
+        window.openEditCatModal = function(id) {
+            const catToEdit = cats.find(c => c.id === id);
+            if (!catToEdit) return;
+
+            // Populate the edit form
+            document.getElementById('edit-cat-id').value = catToEdit.id;
+            document.getElementById('edit-cat-name').value = catToEdit.name;
+            document.getElementById('edit-cat-breed').value = catToEdit.breed;
+            document.getElementById('edit-cat-personality').value = catToEdit.personality;
+            document.getElementById('edit-cat-likes').value = catToEdit.likes ? catToEdit.likes.join(', ') : '';
+            
+            // Close the main manager and open the edit modal
+            catManagerModal.classList.add('hidden');
+            editCatModal.classList.remove('hidden');
+        }
+
+        window.closeEditCatModal = function() {
+            editCatModal.classList.add('hidden');
+            // Re-open the main manager after closing the edit modal
+            openCatManager(); 
+        }
+
 
         /**
          * Renders the list of current cats in the management modal.
@@ -369,10 +452,16 @@
                         <p class="font-bold text-cat-purple">${cat.name} <span class="text-sm font-normal text-gray-500">(${cat.breed})</span></p>
                         <p class="text-xs text-gray-600 truncate">${cat.personality}</p>
                     </div>
-                    <button data-cat-id="${cat.id}" 
-                            class="delete-cat-btn bg-cat-red hover:bg-red-700 text-white text-xs font-semibold py-1 px-3 rounded-full transition duration-150">
-                        Delete
-                    </button>
+                    <div class="flex space-x-2">
+                        <button data-cat-id="${cat.id}" 
+                                class="edit-cat-btn bg-cat-blue hover:bg-blue-700 text-white text-xs font-semibold py-1 px-3 rounded-full transition duration-150">
+                            Edit
+                        </button>
+                        <button data-cat-id="${cat.id}" 
+                                class="delete-cat-btn bg-cat-red hover:bg-red-700 text-white text-xs font-semibold py-1 px-3 rounded-full transition duration-150">
+                            Delete
+                        </button>
+                    </div>
                 `;
                 catListElement.appendChild(catElement);
             });
@@ -386,15 +475,33 @@
                     }
                 };
             });
+
+            // Attach edit listeners
+            document.querySelectorAll('.edit-cat-btn').forEach(button => {
+                button.onclick = (e) => {
+                    const id = e.target.getAttribute('data-cat-id');
+                    if (id) {
+                        openEditCatModal(id);
+                    }
+                };
+            });
         }
+
+        // --- Cat Management Data Functions ---
 
         /**
          * Adds a new cat profile to Firestore.
          */
         async function addCatProfile(e) {
             e.preventDefault();
+
+            // Handle Non-Persistence (Mock Mode)
             if (!db) {
-                alert("Database is not initialized. Cannot save cat."); // Use alert temporarily here as modal is active
+                alert("Database is not initialized. Cannot save cat. Enable persistence by providing a Firebase Config to save profiles.");
+                return;
+            }
+            if (!isAuthenticated) {
+                 alert("You must be authenticated to add a cat profile.");
                 return;
             }
 
@@ -424,7 +531,6 @@
                 // Add the document to Firestore
                 await addDoc(collectionRef, newCat);
                 addCatForm.reset(); // Clear form on success
-                // Status update is handled automatically by the onSnapshot listener
                 console.log("Cat profile successfully added:", name);
             } catch (error) {
                 console.error("Error adding cat profile:", error);
@@ -433,22 +539,66 @@
         }
 
         /**
+         * Updates an existing cat profile in Firestore.
+         */
+        async function updateCatProfile(e) {
+            e.preventDefault();
+
+            if (!db || !isAuthenticated) {
+                alert("Cannot update cat: Database is not initialized or you are not authenticated.");
+                return;
+            }
+
+            const id = document.getElementById('edit-cat-id').value;
+            const name = document.getElementById('edit-cat-name').value.trim();
+            const breed = document.getElementById('edit-cat-breed').value.trim();
+            const personality = document.getElementById('edit-cat-personality').value.trim();
+            const likesStr = document.getElementById('edit-cat-likes').value.trim();
+
+            if (!id || !name || !breed || !personality) {
+                alert("Please ensure all required fields are filled.");
+                return;
+            }
+
+            const updatedCat = {
+                name: name,
+                breed: breed,
+                personality: personality,
+                likes: likesStr.split(',').map(s => s.trim()).filter(s => s.length > 0),
+                dislikes: []
+            };
+
+            const docRef = doc(db, CAT_COLLECTION_PATH(appId), id);
+
+            try {
+                // Use setDoc to overwrite the document with the new data
+                await setDoc(docRef, updatedCat);
+                console.log("Cat profile successfully updated:", name);
+                closeEditCatModal();
+            } catch (error) {
+                console.error("Error updating cat profile:", error);
+                alert(`Error updating cat profile: ${error.message}`);
+            }
+        }
+
+
+        /**
          * Deletes a cat profile from Firestore using its document ID.
          */
         async function deleteCatProfile(id) {
-            if (!db) {
-                alert("Database is not initialized. Cannot delete cat."); // Use alert temporarily here as modal is active
+            // Handle Non-Persistence (Mock Mode)
+            if (!db || !isAuthenticated) {
+                alert("Cannot delete cat: Database is not initialized or you are not authenticated.");
                 return;
             }
             
             const docRef = doc(db, CAT_COLLECTION_PATH(appId), id);
             
             try {
-                // Use custom confirmation instead of window.confirm
+                // Using window.confirm temporarily as building a custom modal for this quick fix is complex
                 const isConfirmed = window.confirm(`Are you sure you want to delete the cat with ID: ${id}?`);
                 if (isConfirmed) {
                     await deleteDoc(docRef);
-                    // Status update is handled automatically by the onSnapshot listener
                     console.log("Cat profile successfully deleted:", id);
                 }
             } catch (error) {
@@ -461,12 +611,14 @@
         // --- Firebase Initialization and Data Fetching ---
 
         function initializeFirebase() {
-            // Attach form listener regardless of Firebase status for mock data fallback testing
+            // Attach form listeners (data functions will check for db/auth)
             addCatForm.addEventListener('submit', addCatProfile);
+            editCatForm.addEventListener('submit', updateCatProfile);
 
             if (Object.keys(firebaseConfig).length === 0) {
                 // FALLBACK MOCK DATA MODE
-                statusDisplay.textContent = "Database Disabled. Loaded 10 Mock Profiles. Chat Ready. To enable persistence, ensure the Firebase Config is provided.";
+                isAuthenticated = false; // Mock mode user is treated as unauthenticated for security features
+                statusDisplay.textContent = "Database Disabled. Loaded 10 Mock Profiles. Chat Ready. (Changes are not persistent)";
                 
                 // Mock Cat Data (for development when no Firebase config is present)
                 const mockCats = [
@@ -474,20 +626,14 @@
                     { id: 'mock2', name: "Noodle", breed: "Calico", personality: "Always hungry and very clumsy. Will trip over air.", likes: ["Food", "Bags"], dislikes: ["Lids", "Empty bowls"] },
                     { id: 'mock3', name: "Shadow", breed: "Black Shorthair", personality: "Mysterious and aloof. Only speaks in riddles or existential dread.", likes: ["Dark corners", "Existential dread"], dislikes: ["Joy", "Bright lights"] },
                     { id: 'mock4', name: "Patches", breed: "Ragdoll", personality: "The alpha cat, but secretly loves belly rubs.", likes: ["Dominance", "Salmon"], dislikes: ["Being ignored", "Dogs"] },
-                    { id: 'mock5', name: "Zippy", breed: "Abyssinian", personality: "Hyperactive and playful. Cannot sit still.", likes: ["Laser pointers", "Climbing"], dislikes: ["Naps", "Stillness"] },
-                    { id: 'mock6', name: "Mittens", breed: "Maine Coon", personality: "A gentle giant, very motherly and protective.", likes: ["Cuddles", "Warm laps"], dislikes: ["Fights", "Cold floors"] },
-                    { id: 'mock7', name: "Captain", breed: "Scottish Fold", personality: "Old, tired, and obsessed with finding a perfect nap spot.", likes: ["Warm spots", "Comfort"], dislikes: ["Youthful energy", "Change"] },
-                    { id: 'mock8', name: "Pixel", breed: "Bengal", personality: "Smart and mischievous, always plotting.", likes: ["Puzzles", "Knocking things over"], dislikes: ["Doors", "Rules"] },
-                    { id: 'mock9', name: "Fluffy", breed: "Persian", personality: "Posh and demanding. Requires constant grooming and adoration.", likes: ["Brushing", "Adoration"], dislikes: ["Dirt", "Commoners"] },
-                    { id: 'mock10', name: "Toulouse", breed: "Orange Tabby", personality: "Lovable goofball, usually confused but means well.", likes: ["Sunbeams", "Scratches"], dislikes: ["The vacuum", "Thinking"] }
                 ];
 
                 cats = mockCats; // Set global cats array
                 characters = [...cats, OWNER_PROFILE];
                 isReady = true;
                 startButton.disabled = false;
-                manageCatsBtn.disabled = true; // Disable management since there's no persistence
-
+                manageCatsBtn.disabled = false;
+                
                 renderCatList(); // Render the mock list
 
                 startButton.addEventListener('click', window.startChat);
@@ -512,11 +658,18 @@
 
                 // Wait for user authentication state before fetching data
                 onAuthStateChanged(auth, (user) => {
+                    isAuthenticated = !!user; // Set global auth state
+                    
                     if (user) {
                         console.log(`User signed in with UID: ${user.uid}. Fetching cat data.`);
                         fetchCats(); // This will enable buttons on success
                     } else {
                         console.log("Waiting for user authentication state...");
+                        // Even if not signed in, enable the manage button so the user can see the unauthorized message
+                        isReady = true;
+                        startButton.disabled = false;
+                        manageCatsBtn.disabled = false;
+                        statusDisplay.textContent = "Authentication Pending. Chat Ready with default Roster.";
                     }
                 });
 
@@ -526,6 +679,7 @@
             } catch (error) {
                 console.error("Firebase initialization error:", error);
                 statusDisplay.textContent = `Error initializing: ${error.message}`;
+                manageCatsBtn.disabled = true;
             }
         }
 
@@ -563,7 +717,7 @@
             }, (error) => {
                 console.error("Error fetching cat data:", error);
                 statusDisplay.textContent = "Error loading cat data. Ensure Firestore rules allow public read/write.";
-                manageCatsBtn.disabled = true; // Disable button if read fails
+                manageCatsBtn.disabled = false; // Keep button enabled but show error inside modal
             });
         }
         
@@ -644,8 +798,9 @@
                 
                 let errorMessage = `Error: The conversation stalled due to a network error. (${error.message})`;
 
+                // FIX: Enhanced 403 error message for the API Key issue
                 if (error.message.includes("403")) {
-                    errorMessage = "Error: The request was **Forbidden (403)**. This indicates an issue with the **Gemini API Key** which is typically automatically provided by the environment.";
+                    errorMessage = "Error: The conversation stalled due to a **Forbidden (403)** error. This usually means the **Gemini API Key** is missing or invalid. The key is normally provided by the environment.";
                 }
 
                 renderMessage(errorMessage);
